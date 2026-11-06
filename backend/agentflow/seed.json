@@ -1,0 +1,970 @@
+{
+  "workflows": [
+    {
+      "id": "wf_invoice",
+      "name": "Invoice Approval Automation",
+      "description": "From inbox to approval. Extract invoice data and keep your payments moving.",
+      "status": "active",
+      "icon": "invoice",
+      "nodes": [
+        {
+          "id": "invoice_trigger",
+          "type": "manual",
+          "label": "Invoice received",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "invoice_extract",
+          "type": "extract",
+          "label": "Extract invoice details",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "prompt": "Extract invoice number, vendor, amount, and currency.",
+            "temperature": 0,
+            "maxTokens": 2048,
+            "outputSchema": "{\"invoice_number\":\"string\",\"amount\":\"number\",\"vendor\":\"string\"}"
+          }
+        },
+        {
+          "id": "invoice_validate",
+          "type": "transform",
+          "label": "Validate invoice",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "expression": "input",
+            "description": "Validate required fields and normalize the result."
+          }
+        },
+        {
+          "id": "invoice_condition",
+          "type": "condition",
+          "label": "Amount exceeds ₹50,000?",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {
+            "variable": "amount",
+            "operator": "greater_than",
+            "value": "50000"
+          }
+        },
+        {
+          "id": "invoice_approve",
+          "type": "approval",
+          "label": "Finance approval",
+          "position": {
+            "x": 1200,
+            "y": 30
+          },
+          "config": {
+            "title": "Review invoice payment",
+            "approver": "Moulika",
+            "description": "Review the extracted invoice before saving.",
+            "expiration": "24 hours"
+          }
+        },
+        {
+          "id": "invoice_store",
+          "type": "http",
+          "label": "Save invoice",
+          "position": {
+            "x": 1500,
+            "y": 150
+          },
+          "config": {
+            "url": "https://example.com/api/results",
+            "method": "POST",
+            "headers": "{\"Content-Type\":\"application/json\"}",
+            "body": "{{ input }}",
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "invoice_end",
+          "type": "end",
+          "label": "Workflow complete",
+          "position": {
+            "x": 1800,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "invoice_reject",
+          "type": "end",
+          "label": "Payment declined",
+          "position": {
+            "x": 1500,
+            "y": 380
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "invoice_trigger-invoice_extract",
+          "source": "invoice_trigger",
+          "target": "invoice_extract"
+        },
+        {
+          "id": "invoice_extract-invoice_validate",
+          "source": "invoice_extract",
+          "target": "invoice_validate"
+        },
+        {
+          "id": "invoice_validate-invoice_condition",
+          "source": "invoice_validate",
+          "target": "invoice_condition"
+        },
+        {
+          "id": "invoice_condition-invoice_approve",
+          "source": "invoice_condition",
+          "target": "invoice_approve",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "invoice_condition-invoice_store",
+          "source": "invoice_condition",
+          "target": "invoice_store",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "invoice_approve-invoice_store",
+          "source": "invoice_approve",
+          "target": "invoice_store",
+          "sourceHandle": "approved"
+        },
+        {
+          "id": "invoice_approve-invoice_reject",
+          "source": "invoice_approve",
+          "target": "invoice_reject",
+          "sourceHandle": "rejected"
+        },
+        {
+          "id": "invoice_store-invoice_end",
+          "source": "invoice_store",
+          "target": "invoice_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    },
+    {
+      "id": "wf_email",
+      "name": "AI Email Classification",
+      "description": "Give every message a home. Automatically categorize and route incoming emails.",
+      "status": "active",
+      "icon": "email",
+      "nodes": [
+        {
+          "id": "email_trigger",
+          "type": "manual",
+          "label": "New email",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "email_classify",
+          "type": "classify",
+          "label": "Classify email",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "prompt": "Classify the input as billing, technical, or general.",
+            "temperature": 0.1,
+            "maxTokens": 512
+          }
+        },
+        {
+          "id": "email_route",
+          "type": "condition",
+          "label": "Urgent message?",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "variable": "priority",
+            "operator": "equals",
+            "value": "high"
+          }
+        },
+        {
+          "id": "email_send",
+          "type": "http",
+          "label": "Send to team inbox",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {
+            "url": "https://example.com/api/results",
+            "method": "POST",
+            "headers": "{\"Content-Type\":\"application/json\"}",
+            "body": "{{ input }}",
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "email_end",
+          "type": "end",
+          "label": "Done",
+          "position": {
+            "x": 1200,
+            "y": 150
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "email_trigger-email_classify",
+          "source": "email_trigger",
+          "target": "email_classify"
+        },
+        {
+          "id": "email_classify-email_route",
+          "source": "email_classify",
+          "target": "email_route"
+        },
+        {
+          "id": "email_route-email_send",
+          "source": "email_route",
+          "target": "email_send",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "email_route-email_end",
+          "source": "email_route",
+          "target": "email_end",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "email_send-email_end",
+          "source": "email_send",
+          "target": "email_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    },
+    {
+      "id": "wf_support",
+      "name": "Customer Support Ticket Routing",
+      "description": "Get customers to the right people with intelligent ticket triage.",
+      "status": "active",
+      "icon": "support",
+      "nodes": [
+        {
+          "id": "support_trigger",
+          "type": "manual",
+          "label": "Ticket received",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "support_agent",
+          "type": "agent",
+          "label": "Analyze support ticket",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "prompt": "Analyze the supplied data and produce a structured recommendation.",
+            "temperature": 0.3,
+            "maxTokens": 2048
+          }
+        },
+        {
+          "id": "support_classify",
+          "type": "classify",
+          "label": "Assign department",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "prompt": "Classify the input as billing, technical, or general.",
+            "temperature": 0.1,
+            "maxTokens": 512
+          }
+        },
+        {
+          "id": "support_send",
+          "type": "http",
+          "label": "Route to support",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {
+            "url": "https://example.com/api/results",
+            "method": "POST",
+            "headers": "{\"Content-Type\":\"application/json\"}",
+            "body": "{{ input }}",
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "support_end",
+          "type": "end",
+          "label": "Done",
+          "position": {
+            "x": 1200,
+            "y": 150
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "support_trigger-support_agent",
+          "source": "support_trigger",
+          "target": "support_agent"
+        },
+        {
+          "id": "support_agent-support_classify",
+          "source": "support_agent",
+          "target": "support_classify"
+        },
+        {
+          "id": "support_classify-support_send",
+          "source": "support_classify",
+          "target": "support_send"
+        },
+        {
+          "id": "support_send-support_end",
+          "source": "support_send",
+          "target": "support_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    },
+    {
+      "id": "wf_document",
+      "name": "Document Summarization Pipeline",
+      "description": "Turn lengthy documents into clear, actionable summaries in seconds.",
+      "status": "draft",
+      "icon": "document",
+      "nodes": [
+        {
+          "id": "doc_trigger",
+          "type": "manual",
+          "label": "Document uploaded",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "doc_parse",
+          "type": "parser",
+          "label": "Parse document",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "description": "Parse the demo document into structured text."
+          }
+        },
+        {
+          "id": "doc_llm",
+          "type": "llm",
+          "label": "Generate summary",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "systemPrompt": "You are a helpful automation assistant.",
+            "prompt": "Summarize the supplied input.",
+            "temperature": 0.3,
+            "maxTokens": 2048,
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "doc_end",
+          "type": "end",
+          "label": "Summary ready",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "doc_trigger-doc_parse",
+          "source": "doc_trigger",
+          "target": "doc_parse"
+        },
+        {
+          "id": "doc_parse-doc_llm",
+          "source": "doc_parse",
+          "target": "doc_llm"
+        },
+        {
+          "id": "doc_llm-doc_end",
+          "source": "doc_llm",
+          "target": "doc_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    },
+    {
+      "id": "wf_lead",
+      "name": "Lead Qualification Agent",
+      "description": "Research, score, and qualify leads so your team can focus on the right ones.",
+      "status": "active",
+      "icon": "lead",
+      "nodes": [
+        {
+          "id": "lead_trigger",
+          "type": "manual",
+          "label": "New lead",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "lead_agent",
+          "type": "agent",
+          "label": "Qualify lead",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "prompt": "Analyze the supplied data and produce a structured recommendation.",
+            "temperature": 0.3,
+            "maxTokens": 2048
+          }
+        },
+        {
+          "id": "lead_score",
+          "type": "transform",
+          "label": "Normalize lead score",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "expression": "input",
+            "description": "Validate required fields and normalize the result."
+          }
+        },
+        {
+          "id": "lead_send",
+          "type": "http",
+          "label": "Update CRM",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {
+            "url": "https://example.com/api/results",
+            "method": "POST",
+            "headers": "{\"Content-Type\":\"application/json\"}",
+            "body": "{{ input }}",
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "lead_end",
+          "type": "end",
+          "label": "Done",
+          "position": {
+            "x": 1200,
+            "y": 150
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "lead_trigger-lead_agent",
+          "source": "lead_trigger",
+          "target": "lead_agent"
+        },
+        {
+          "id": "lead_agent-lead_score",
+          "source": "lead_agent",
+          "target": "lead_score"
+        },
+        {
+          "id": "lead_score-lead_send",
+          "source": "lead_score",
+          "target": "lead_send"
+        },
+        {
+          "id": "lead_send-lead_end",
+          "source": "lead_send",
+          "target": "lead_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    },
+    {
+      "id": "wf_report",
+      "name": "Daily Report Generator",
+      "description": "Your daily performance pulse, collected and summarized automatically.",
+      "status": "paused",
+      "icon": "report",
+      "nodes": [
+        {
+          "id": "report_trigger",
+          "type": "manual",
+          "label": "Start daily report",
+          "position": {
+            "x": 0,
+            "y": 150
+          },
+          "config": {}
+        },
+        {
+          "id": "report_http",
+          "type": "http",
+          "label": "Fetch performance data",
+          "position": {
+            "x": 300,
+            "y": 150
+          },
+          "config": {
+            "url": "https://example.com/api/results",
+            "method": "POST",
+            "headers": "{\"Content-Type\":\"application/json\"}",
+            "body": "{{ input }}",
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "report_llm",
+          "type": "llm",
+          "label": "Write daily report",
+          "position": {
+            "x": 600,
+            "y": 150
+          },
+          "config": {
+            "model": "gpt-4.1-mini",
+            "systemPrompt": "You are a helpful automation assistant.",
+            "prompt": "Summarize the supplied input.",
+            "temperature": 0.3,
+            "maxTokens": 2048,
+            "timeout": 30,
+            "retries": 2
+          }
+        },
+        {
+          "id": "report_end",
+          "type": "end",
+          "label": "Report ready",
+          "position": {
+            "x": 900,
+            "y": 150
+          },
+          "config": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "report_trigger-report_http",
+          "source": "report_trigger",
+          "target": "report_http"
+        },
+        {
+          "id": "report_http-report_llm",
+          "source": "report_http",
+          "target": "report_llm"
+        },
+        {
+          "id": "report_llm-report_end",
+          "source": "report_llm",
+          "target": "report_end"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-09-15T05:25:33.520Z",
+      "updatedAt": "2026-10-30T04:49:33.520Z",
+      "totalRuns": 0,
+      "successRate": 0
+    }
+  ],
+  "integrations": [
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "description": "Read, classify, and send emails from your workflows.",
+      "category": "Communication",
+      "icon": "mail",
+      "color": "#ea4335",
+      "connected": false
+    },
+    {
+      "id": "sheets",
+      "name": "Google Sheets",
+      "description": "Turn your spreadsheets into connected, automated data.",
+      "category": "Productivity",
+      "icon": "sheet",
+      "color": "#16a34a",
+      "connected": false
+    },
+    {
+      "id": "drive",
+      "name": "Google Drive",
+      "description": "Find, read, and organize documents in one place.",
+      "category": "Storage",
+      "icon": "drive",
+      "color": "#eab308",
+      "connected": false
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Keep your team in the loop with timely notifications.",
+      "category": "Communication",
+      "icon": "slack",
+      "color": "#8b5cf6",
+      "connected": false
+    },
+    {
+      "id": "webhooks",
+      "name": "Webhooks",
+      "description": "Trigger workflows from events in your favorite tools.",
+      "category": "Developer Tools",
+      "icon": "webhook",
+      "color": "#ec4899",
+      "connected": false
+    },
+    {
+      "id": "http",
+      "name": "HTTP API",
+      "description": "Connect any REST endpoint to your workflow.",
+      "category": "Developer Tools",
+      "icon": "globe",
+      "color": "#3b82f6",
+      "connected": false
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "Query and write structured data with confidence.",
+      "category": "Storage",
+      "icon": "database",
+      "color": "#0284c7",
+      "connected": false
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI-compatible LLM",
+      "description": "Add intelligence with your preferred language model.",
+      "category": "AI Providers",
+      "icon": "sparkles",
+      "color": "#0d9488",
+      "connected": false
+    }
+  ],
+  "settings": {
+    "name": "Moulika",
+    "email": "moulika@example.com",
+    "theme": "light",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.3,
+    "maxSteps": 25,
+    "timeout": 60,
+    "retries": 2,
+    "concurrency": 5,
+    "tracing": true,
+    "retention": "30 days",
+    "logLevel": "info",
+    "redaction": true,
+    "notifyFailure": true,
+    "notifyApproval": true,
+    "notifyCompletion": false
+  },
+  "registry": [
+    {
+      "type": "manual",
+      "name": "Manual Trigger",
+      "category": "Trigger",
+      "description": "Start a workflow on demand",
+      "color": "#6366f1",
+      "defaultConfig": {},
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "webhook",
+      "name": "Webhook Trigger",
+      "category": "Trigger",
+      "description": "Receive an incoming request",
+      "color": "#6366f1",
+      "defaultConfig": {},
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": true
+    },
+    {
+      "type": "schedule",
+      "name": "Schedule Trigger",
+      "category": "Trigger",
+      "description": "Run on a recurring schedule",
+      "color": "#6366f1",
+      "defaultConfig": {},
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": true
+    },
+    {
+      "type": "llm",
+      "name": "LLM Generation",
+      "category": "AI",
+      "description": "Generate text with a language model",
+      "color": "#8b5cf6",
+      "defaultConfig": {
+        "model": "gpt-4.1-mini",
+        "systemPrompt": "You are a helpful automation assistant.",
+        "prompt": "Summarize the supplied input.",
+        "temperature": 0.3,
+        "maxTokens": 2048,
+        "timeout": 30,
+        "retries": 2
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "classify",
+      "name": "Text Classification",
+      "category": "AI",
+      "description": "Classify text into useful categories",
+      "color": "#8b5cf6",
+      "defaultConfig": {
+        "model": "gpt-4.1-mini",
+        "prompt": "Classify the input as billing, technical, or general.",
+        "temperature": 0.1,
+        "maxTokens": 512
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "extract",
+      "name": "Information Extraction",
+      "category": "AI",
+      "description": "Turn unstructured content into data",
+      "color": "#8b5cf6",
+      "defaultConfig": {
+        "model": "gpt-4.1-mini",
+        "prompt": "Extract invoice number, vendor, amount, and currency.",
+        "temperature": 0,
+        "maxTokens": 2048,
+        "outputSchema": "{\"invoice_number\":\"string\",\"amount\":\"number\",\"vendor\":\"string\"}"
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "agent",
+      "name": "AI Agent",
+      "category": "AI",
+      "description": "Reason through a defined task",
+      "color": "#8b5cf6",
+      "defaultConfig": {
+        "model": "gpt-4.1-mini",
+        "prompt": "Analyze the supplied data and produce a structured recommendation.",
+        "temperature": 0.3,
+        "maxTokens": 2048
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "condition",
+      "name": "Condition",
+      "category": "Logic",
+      "description": "Branch based on a comparison",
+      "color": "#d99a23",
+      "defaultConfig": {
+        "variable": "amount",
+        "operator": "greater_than",
+        "value": "50000"
+      },
+      "outputs": [
+        "true",
+        "false"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "transform",
+      "name": "Transform Data",
+      "category": "Logic",
+      "description": "Map and reshape your data",
+      "color": "#d99a23",
+      "defaultConfig": {
+        "expression": "input",
+        "description": "Validate required fields and normalize the result."
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "merge",
+      "name": "Merge",
+      "category": "Logic",
+      "description": "Bring workflow branches together",
+      "color": "#d99a23",
+      "defaultConfig": {},
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "end",
+      "name": "End",
+      "category": "Logic",
+      "description": "Complete the workflow",
+      "color": "#8591a5",
+      "defaultConfig": {},
+      "outputs": [],
+      "comingSoon": false
+    },
+    {
+      "type": "http",
+      "name": "HTTP Request",
+      "category": "Tool",
+      "description": "Send data to an HTTP endpoint",
+      "color": "#3b82f6",
+      "defaultConfig": {
+        "url": "https://example.com/api/results",
+        "method": "POST",
+        "headers": "{\"Content-Type\":\"application/json\"}",
+        "body": "{{ input }}",
+        "timeout": 30,
+        "retries": 2
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "calculator",
+      "name": "Calculator",
+      "category": "Tool",
+      "description": "Evaluate a numeric expression",
+      "color": "#3b82f6",
+      "defaultConfig": {
+        "expression": "60000 * 1.18"
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "parser",
+      "name": "Document Parser",
+      "category": "Tool",
+      "description": "Parse documents and structured files",
+      "color": "#3b82f6",
+      "defaultConfig": {
+        "description": "Parse the demo document into structured text."
+      },
+      "outputs": [
+        "default"
+      ],
+      "comingSoon": false
+    },
+    {
+      "type": "approval",
+      "name": "Approval Request",
+      "category": "Human",
+      "description": "Pause and ask a person to review",
+      "color": "#0d9488",
+      "defaultConfig": {
+        "title": "Review invoice payment",
+        "approver": "Moulika",
+        "description": "Review the extracted invoice before saving.",
+        "expiration": "24 hours"
+      },
+      "outputs": [
+        "approved",
+        "rejected"
+      ],
+      "comingSoon": false
+    }
+  ]
+}

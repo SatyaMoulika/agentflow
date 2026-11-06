@@ -1,0 +1,7 @@
+node_modules
+dist
+package-lock.json
+*.tsbuildinfo
+
+# Backend drafts are paused pending architecture requirements.
+backend/
