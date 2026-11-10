@@ -6,8 +6,10 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_validator
 
+from app.modules.agents.schemas import AgentMetadata
 from app.modules.executions.payloads import InvalidExecutionPayloadError, copy_payload
-from app.modules.executions.state import FailureCode, NodeStatus, RunStatus
+from app.modules.executions.provider_schemas import ProviderMetadata
+from app.modules.executions.state import EventType, FailureCode, NodeStatus, RunStatus
 from app.modules.workflows.schemas import WorkflowVersionResponse
 
 
@@ -68,6 +70,8 @@ class NodeAttemptResponse(HistoryResponse):
     status: NodeStatus
     duration_ms: int | None
     retry: RetryScheduleResponse | None = None
+    provider: ProviderMetadata | None = None
+    agent: AgentMetadata | None = None
 
 
 class RunSummary(HistoryResponse):
@@ -87,6 +91,21 @@ class RunSummary(HistoryResponse):
 class RunResponse(RunSummary):
     version: WorkflowVersionResponse
     node_runs: list[NodeAttemptResponse]
+
+
+class ExecutionEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True, populate_by_name=True)
+
+    sequence: int
+    node_run_id: UUID | None
+    event_type: EventType
+    payload: dict[str, JsonValue] = Field(validation_alias="event_payload")
+    created_at: AwareDatetime
+
+
+class ExecutionEventPage(BaseModel):
+    items: list[ExecutionEventResponse]
+    next_after_sequence: int
 
 
 class RunListParams(BaseModel):

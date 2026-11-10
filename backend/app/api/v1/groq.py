@@ -2,14 +2,16 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.dependencies import get_current_user, get_settings
 from app.core.config import Settings
-from app.core.exceptions import REQUEST_ID_HEADER, ErrorResponse
+from app.core.exceptions import REQUEST_ID_HEADER, ErrorResponse, error_response
 from app.modules.auth.schemas import UserResponse
 from app.modules.executions.groq_provider import GroqError, complete
+from app.modules.executions.provider_schemas import ProviderMetadata
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -30,6 +32,7 @@ class GroqResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str
     content: str
+    metadata: ProviderMetadata | None = None
 
 
 @router.post(
@@ -54,9 +57,18 @@ def create_completion(
     user: Annotated[UserResponse, Depends(get_current_user)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> GroqResponse:
-    try:
-        result = complete(settings, data.prompt)
-    except GroqError as error:
-        raise HTTPException(status_code=error.status) from None
+    result = complete(settings, data.prompt)
     response.headers["Cache-Control"] = "no-store"
     return GroqResponse(**result)
+
+
+async def provider_error(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, GroqError)
+    headers = {"Cache-Control": "no-store"}
+    if exc.retry_after is not None:
+        headers["Retry-After"] = str(exc.retry_after)
+    return error_response(request, exc.status, headers, public_error=(exc.code, str(exc)))
+
+
+def register_provider_exception_handlers(application: FastAPI) -> None:
+    application.add_exception_handler(GroqError, provider_error)

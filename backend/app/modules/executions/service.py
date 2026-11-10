@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError, TimeoutError
 
 from app.core.config import Settings
 from app.infrastructure.database.models import (
+    ExecutionEvent,
     NodeRun,
     RunCommand,
     User,
@@ -16,6 +17,7 @@ from app.infrastructure.database.models import (
     WorkflowVersion,
 )
 from app.infrastructure.database.session import Database
+from app.modules.agents.schemas import AgentMetadata
 from app.modules.executions.commands import key_digest, request_digest
 from app.modules.executions.dispatch import enqueue_run
 from app.modules.executions.dispatch_models import WorkflowDispatch
@@ -25,10 +27,13 @@ from app.modules.executions.exceptions import (
     ExecutionStorageUnavailableError,
     WorkflowNotExecutableError,
 )
+from app.modules.executions.provider_schemas import ProviderMetadata
 from app.modules.executions.repository import ExecutionRepository
 from app.modules.executions.retry_models import NodeRetry
 from app.modules.executions.runner import RETRY_SAFE_TYPES, WorkflowRunner
 from app.modules.executions.schemas import (
+    ExecutionEventPage,
+    ExecutionEventResponse,
     NodeAttemptResponse,
     RetryScheduleResponse,
     RunCreateRequest,
@@ -38,7 +43,13 @@ from app.modules.executions.schemas import (
     RunResponse,
     RunSummary,
 )
-from app.modules.executions.state import NODE_TERMINAL, RUN_TERMINAL, NodeStatus, RunStatus
+from app.modules.executions.state import (
+    NODE_TERMINAL,
+    RUN_TERMINAL,
+    EventType,
+    NodeStatus,
+    RunStatus,
+)
 from app.modules.workflows.compiler import compile_workflow
 from app.modules.workflows.exceptions import WorkflowNotFoundError
 from app.modules.workflows.node_registry import EXECUTION_READY_TYPES
@@ -50,6 +61,22 @@ class ExecutionService:
     def __init__(self, database: Database, settings: Settings | None = None) -> None:
         self.database = database
         self.settings = settings
+
+    def events(
+        self, *, run_id: UUID, owner_id: UUID, after_sequence: int, limit: int
+    ) -> ExecutionEventPage:
+        try:
+            with self.database.session() as session:
+                events = ExecutionRepository(session).events_owned(
+                    run_id=run_id, owner_id=owner_id, after_sequence=after_sequence, limit=limit
+                )
+                items = [ExecutionEventResponse.model_validate(event) for event in events]
+                return ExecutionEventPage(
+                    items=items,
+                    next_after_sequence=items[-1].sequence if items else after_sequence,
+                )
+        except (OperationalError, TimeoutError):
+            raise ExecutionStorageUnavailableError() from None
 
     def list(self, *, owner_id: UUID, params: RunListParams) -> RunPage:
         terms = [Workflow.owner_id == owner_id]
@@ -294,8 +321,32 @@ class ExecutionService:
                     )
                 }
                 nodes = []
+                providers = {
+                    event.node_run_id: ProviderMetadata.model_validate(
+                        event.event_payload["provider"]
+                    )
+                    for event in session.scalars(
+                        select(ExecutionEvent).where(
+                            ExecutionEvent.workflow_run_id == run_id,
+                            ExecutionEvent.event_type == EventType.NODE_STATUS_CHANGED,
+                            ExecutionEvent.event_payload.op("?")("provider"),
+                        )
+                    )
+                }
+                agents = {
+                    event.node_run_id: AgentMetadata.model_validate(event.event_payload["agent"])
+                    for event in session.scalars(
+                        select(ExecutionEvent).where(
+                            ExecutionEvent.workflow_run_id == run_id,
+                            ExecutionEvent.event_type == EventType.NODE_STATUS_CHANGED,
+                            ExecutionEvent.event_payload.op("?")("agent"),
+                        )
+                    )
+                }
                 for row in attempts:
                     node = NodeAttemptResponse.model_validate(row)
+                    node.provider = providers.get(row.id)
+                    node.agent = agents.get(row.id)
                     retry = retries.get(row.id)
                     if retry is not None:
                         node.retry = RetryScheduleResponse.model_validate(retry)

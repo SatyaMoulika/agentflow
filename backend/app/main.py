@@ -4,6 +4,8 @@ from fastapi import FastAPI
 
 from app.api.router import api_router
 from app.api.v1.auth import register_auth_exception_handlers
+from app.api.v1.connections import register_connection_exception_handlers
+from app.api.v1.groq import register_provider_exception_handlers
 from app.api.v1.runs import register_execution_exception_handlers
 from app.api.workflow_dependencies import register_workflow_exception_handlers
 from app.core.config import Settings, load_settings
@@ -40,6 +42,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_auth_exception_handlers(application)
     register_workflow_exception_handlers(application)
     register_execution_exception_handlers(application)
+    register_connection_exception_handlers(application)
+    register_provider_exception_handlers(application)
     application.add_middleware(RequestContextMiddleware, environment=settings.environment)
     application.include_router(api_router)
     return application

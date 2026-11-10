@@ -1,43 +1,12 @@
 # AgentFlow backend
 
-Phase 6D adds persisted exponential retry delays for background pure-node failures.
-Migration head is 0008. Retry policy is frozen per run; eligible attempts release
-the worker until due, with cancellation and immutable retry history. Synchronous
-pure retries remain immediate; Groq remains excluded. See [scheduled retry notes](../docs/learning-notes/scheduled-retries.md).
-The phase snapshots below describe earlier increments.
+Current source migration head and configured development revision: **0010** (checked 10 November 2026 with no metadata drift). Phases 1–7 are implemented for their documented scope. Pure workflows support opt-in background dispatch/recovery/scheduled retries; Groq and HTTP graphs remain synchronous and excluded from automatic replay. **8A** now adds a bounded synchronous LangGraph calculator agent; next are authorized HTTP tools (8B) and persistent checkpoints (8C).
 
-Phase 6C now supports opt-in queued pure workflows: atomic run/receipt/outbox
-creation, opaque-ID Celery delivery, fenced worker execution, heartbeat and automatic
-recovery discovery. Migration head is 0007. Enable
-`AGENTFLOW_BACKGROUND_EXECUTION_ENABLED=true` with the worker and dispatcher
-running; Groq graphs remain synchronous. See [startup, contracts and browser checks](../docs/learning-notes/background-execution.md).
-The phase snapshots below record earlier increments.
+Use the [implementation plan](../docs/backend-implementation-plan.md) as the current phase status and the [verification guide](../docs/verification.md) for actual check results and acceptance limits. Baseline: **1,301 backend tests** with isolated PostgreSQL/Redis and **135 frontend tests**, plus lint, formatting, type checks and build. Browser access was retried and remains unavailable.
 
-Phase 6C, 6 November 2026: an internal pure worker runner now executes queued runs
-and recovers previously claimed running runs after lease expiry. It reuses committed
-outputs, reconciles interrupted attempts within the saved budget, renews leases
-between nodes and fences every write. Groq graphs and unclaimed synchronous running
-runs are refused. Workflow tasks/outbox dispatch, automatic recovery scheduling and
-asynchronous API responses remain next. See [pure worker recovery](../docs/learning-notes/pure-worker-runner.md).
-Earlier Phase 6C notices below are historical.
+Groq generation/version-bound edits, classification/extraction, JSON parsing, fixed public HTTPS GET connections, protected optional credentials and provider failure/usage history are implemented. See [provider hardening](../docs/learning-notes/provider-integration-hardening.md), [protected connections](../docs/learning-notes/secure-http-connections.md) and the [startup walkthrough](../docs/real-backend-walkthrough.md). Preserve the existing private `.env`.
 
-The authenticated Groq connection, workflow node and new-workflow generator use `GROQ_API_KEY` from `backend/.env` and default to `openai/gpt-oss-120b`; see the [walkthrough](../docs/real-backend-walkthrough.md#generate-a-workflow-from-a-prompt). Generation returns a validated proposal for review and does not save or execute it.
-
-Phase 6C groundwork adds queued-run claim leases and fencing primitives. Workflow execution remains synchronous; persisted progress, worker recovery, workflow outbox integration and asynchronous dispatch are not yet implemented. See [claim notes](../docs/learning-notes/run-claims.md). Prior phase descriptions below are historical.
-
-Phase 6B foundation: migration 0005 adds a durable outbox and leased dispatcher for transport probes. Workflow runs remain synchronous; worker claims/recovery and workflow dispatch remain next. See [outbox notes](../docs/learning-notes/transactional-outbox.md). Earlier phase descriptions below are historical.
-
-Phase 6A, 4 November 2026: optional Redis/Celery transport and separate payload-free probe worker are implemented and verified. Workflow run POST remains synchronous. Full isolated PostgreSQL/Redis checks: 935 passed; ordinary: 665 passed/270 skipped; Ruff 131 files/Pyright clean. Migration head remains 0004. See [worker transport notes](../docs/learning-notes/worker-transport.md) for startup, tests, limitations and the Groq roadmap. Prior phase counts below are historical.
-
-Current Phase 5D verification (4 November 2026): **905 backend tests** with PostgreSQL, ordinary **638 passed/267 skipped**, Ruff **124 files**, Pyright clean; frontend **120 tests**, lint/TypeScript/build pass. Migration **0004** is applied to the local development database with no metadata drift and existing row counts preserved. API **18 operations/15 paths**. Earlier phase-specific counts below remain historical. See [execution command notes](../docs/learning-notes/execution-commands.md) and the [walkthrough](../docs/real-backend-walkthrough.md).
-
-The active backend provides the tested FastAPI foundation plus optional PostgreSQL startup, SQLAlchemy connection pooling, and operation-local sessions. Ruff, Pyright, and Pytest share one repeatable check command with optional real PostgreSQL tests. User, workflow, and immutable workflow-version models are now managed by Alembic revision 0001. User/workflow repositories and caller-owned transaction contexts are implemented. Public registration now validates input, hashes passwords with Argon2id, and commits through AuthService. Login with short-lived access JWTs and authenticated /auth/me now work when a private signing key is configured. Phase 3C adds durable refresh families, one-use rotation, replay revocation and bound CSRF cookies through migration 0002. Phase 3D adds idempotent refresh-family logout and authenticated workflow/version ownership dependencies. Phase 4A adds authenticated metadata CRUD/archive. Phase 4B adds initial saved definitions, immutable snapshots, expected-version concurrency and historical reads. Phase 4C publishes an authenticated six-node configuration catalog and strict internal validators, with strict typed configuration contracts. Phase 4D adds owned saved/candidate graph validation and deterministic compilation without side effects. Phase 5A adds durable run, node-attempt and event tables, owner-scoped repository operations and guarded state transitions in migration 0003. Phase 5B adds synchronous manual/transform/end execution and owner-scoped run creation/history APIs with actual persisted inputs/results/errors. Phase 5C adds typed condition/calculator execution, selected-route traversal, chosen-predecessor merges and atomic skipped-node completion history. All six registered pure types now advertise execution readiness. Workers and Groq follow later. The default frontend now uses real authentication, owned workflow editing/validation and persisted execution history. GET /runs supplies owner-scoped summaries.
-
-To view your own persisted data now, follow [View the real backend and remaining work](../docs/real-backend-walkthrough.md). Start both the API and Vite using that guide; new accounts have empty real data.
-
-## Frontend integration — 4 November 2026
-
-The default app now uses the real API; follow the [startup walkthrough](../docs/real-backend-walkthrough.md) for port 5173 origins and local cookie settings. Initial integration adds GET /runs, with no schema change. Verification at that increment: 858 backend tests with PostgreSQL; 607 passed/251 skipped ordinarily; Ruff 119 files and Pyright clean. Historical phase-specific results below remain historical. Frontend at that increment: 108 tests, lint, TypeScript and build passed. HTTP proxy/session/save/run/restart checks pass; visual browser QA remains unavailable.
+The module-specific sections below explain earlier increments. Historical counts and phase-specific limitations describe those increments; current status and commands are maintained in the guides linked above.
 
 ## Run
 
@@ -437,11 +406,7 @@ Docker/socket integration checks needed permitted access outside the sandbox. Th
 
 ## Review and next increment
 
-Next: **Phase 6B — transactional outbox and dispatcher**, then claims/leases, recovery and scheduled retries. Phase 5C exclusive routing and arithmetic are complete. Background workers, Groq and remaining frontend capabilities follow later. Initial frontend integration is complete; see [frontend notes](../docs/learning-notes/frontend-api.md).
-
-Independent exercise: extend the branching example with a nested condition and early end while other routes share a merge. Predict and verify succeeded/skipped node sets for three inputs, then save a new version and confirm old results remain unchanged. Use your own test data; no solution is supplied.
-
-See [execution persistence notes](../docs/learning-notes/execution-persistence.md), [workflow validation notes](../docs/learning-notes/workflow-validation.md), [node registry notes](../docs/learning-notes/node-registry.md), [workflow version notes](../docs/learning-notes/workflow-versions.md), [workflow metadata notes](../docs/learning-notes/workflow-metadata.md), [logout/ownership notes](../docs/learning-notes/logout-ownership.md), [refresh-session notes](../docs/learning-notes/refresh-sessions.md), [login/token learning notes](../docs/learning-notes/login-access-tokens.md), [registration learning notes](../docs/learning-notes/authentication.md), [repository learning notes](../docs/learning-notes/repositories.md), [PostgreSQL/session learning notes](../docs/learning-notes/sqlalchemy.md), [backend checks learning notes](../docs/learning-notes/backend-checks.md), [HTTP observability learning notes](../docs/learning-notes/http-observability.md), [configuration/lifespan learning notes](../docs/learning-notes/configuration.md), [FastAPI notes](../docs/learning-notes/fastapi.md), the [phase plan](../docs/backend-implementation-plan.md), and the [development log](../docs/development-log.md).
+**Phase 8A — bounded LangGraph calculator agent** is implemented; see [usage and limits](../docs/learning-notes/calculator-agent.md). HTTP agent tools and persistent checkpoints/recovery follow in 8B/8C. Browser acceptance remains pending because its access host is unavailable. See the [current plan](../docs/backend-implementation-plan.md) and [verification guide](../docs/verification.md).
 
 ## Execution commands — Phase 5D
 

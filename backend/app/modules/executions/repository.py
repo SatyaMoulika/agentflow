@@ -4,6 +4,7 @@ import re
 from typing import Any
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,12 +15,14 @@ from app.infrastructure.database.models import (
     WorkflowRun,
     WorkflowVersion,
 )
+from app.modules.agents.schemas import AgentMetadata
 from app.modules.executions.exceptions import (
     ExecutionConflictError,
     ExecutionNotFoundError,
     InvalidExecutionDataError,
 )
 from app.modules.executions.payloads import copy_payload
+from app.modules.executions.provider_schemas import ProviderMetadata
 from app.modules.executions.state import (
     NODE_TERMINAL,
     RUN_TERMINAL,
@@ -285,6 +288,8 @@ class ExecutionRepository:
         target: NodeStatus,
         output: dict[str, Any] | None = None,
         error_code: FailureCode | None = None,
+        provider_metadata: dict[str, Any] | None = None,
+        agent_metadata: dict[str, Any] | None = None,
     ) -> NodeRun:
         run = self.lock_owned(run_id=run_id, owner_id=owner_id)
         _check_revision(run.revision, expected_run_revision)
@@ -304,6 +309,28 @@ class ExecutionRepository:
         _check_revision(attempt.revision, expected_revision)
         require_node_transition(attempt.status, target)
         result = _result_data(target, output, error_code)
+        provider = None
+        if provider_metadata is not None:
+            if target not in {NodeStatus.SUCCEEDED, NodeStatus.FAILED}:
+                raise InvalidExecutionDataError()
+            try:
+                detail = ProviderMetadata.model_validate(provider_metadata)
+            except ValidationError:
+                raise InvalidExecutionDataError() from None
+            if detail.error_code is not None and detail.error_code != error_code:
+                raise InvalidExecutionDataError()
+            provider = detail.model_dump(exclude_none=True)
+        agent = None
+        if agent_metadata is not None:
+            if target not in {NodeStatus.SUCCEEDED, NodeStatus.FAILED}:
+                raise InvalidExecutionDataError()
+            try:
+                agent_detail = AgentMetadata.model_validate(agent_metadata)
+            except ValidationError:
+                raise InvalidExecutionDataError() from None
+            if (agent_detail.failure_reason is not None) != (target == NodeStatus.FAILED):
+                raise InvalidExecutionDataError()
+            agent = agent_detail.model_dump(exclude_none=True)
         previous = attempt.status
         now = self.session.scalar(select(func.clock_timestamp()))
         assert now is not None
@@ -322,7 +349,12 @@ class ExecutionRepository:
         self._event(
             run,
             EventType.NODE_STATUS_CHANGED,
-            {"from_status": previous.value, "to_status": target.value},
+            {
+                "from_status": previous.value,
+                "to_status": target.value,
+                **({"provider": provider} if provider is not None else {}),
+                **({"agent": agent} if agent is not None else {}),
+            },
             attempt.id,
         )
         return attempt

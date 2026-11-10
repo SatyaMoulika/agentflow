@@ -5,6 +5,10 @@ from uuid import UUID
 
 from app.core.config import Settings
 from app.infrastructure.database.session import Database
+from app.modules.agents.runner import AgentExecutionError, execute_agent
+from app.modules.connections.http_executor import get_json
+from app.modules.connections.secrets import ConnectionUnavailableError
+from app.modules.connections.service import ConnectionService
 from app.modules.executions.dispatch_models import WorkflowDispatch
 from app.modules.executions.exceptions import ExecutionConflictError
 from app.modules.executions.groq_provider import GroqError, complete
@@ -18,9 +22,13 @@ from app.modules.executions.operations import (
 from app.modules.executions.payloads import copy_payload
 from app.modules.executions.repository import ExecutionRepository
 from app.modules.executions.state import RETRYABLE_FAILURE_CODES, FailureCode, NodeStatus, RunStatus
+from app.modules.executions.structured_tools import prepare, validate
 from app.modules.workflows.compiler import CompiledNode, CompiledWorkflow
+from app.modules.workflows.node_configs import AgentConfig
 
-RETRY_SAFE_TYPES = frozenset({"manual", "transform", "condition", "calculator", "merge", "end"})
+RETRY_SAFE_TYPES = frozenset(
+    {"manual", "transform", "condition", "calculator", "merge", "end", "json_parser"}
+)
 
 
 class _Cancelled(Exception):
@@ -46,6 +54,8 @@ class WorkflowRunner:
         attempt_revision: int,
         code: FailureCode,
         terminal: bool = True,
+        provider_metadata: dict[str, Any] | None = None,
+        agent_metadata: dict[str, Any] | None = None,
     ) -> None:
         with self.database.unit_of_work() as session:
             repository = ExecutionRepository(session)
@@ -58,6 +68,8 @@ class WorkflowRunner:
                 expected_revision=attempt_revision,
                 target=NodeStatus.FAILED,
                 error_code=code,
+                provider_metadata=provider_metadata,
+                agent_metadata=agent_metadata,
             )
             if terminal:
                 repository.transition_run(
@@ -79,7 +91,9 @@ class WorkflowRunner:
         visited: set[str],
         nodes: dict[str, CompiledNode],
         max_attempts: int,
-    ) -> tuple[dict[str, Any], str | None, UUID] | None:
+    ) -> (
+        tuple[dict[str, Any], str | None, UUID, dict[str, Any] | None, dict[str, Any] | None] | None
+    ):
         mapping_error = None
         config: dict[str, Any] = {}
         try:
@@ -121,8 +135,38 @@ class WorkflowRunner:
             if mapping_error is not None:
                 return None
             code = None
+            provider_metadata = None
+            agent_metadata = None
             try:
-                if node.type == "groq":
+                if node.type == "agent":
+                    if self.settings is None:
+                        raise NodeExecutionError(FailureCode.PROVIDER_NOT_CONFIGURED)
+
+                    def check_active() -> None:
+                        with self.database.unit_of_work() as active_session:
+                            self._check(ExecutionRepository(active_session), run_id, owner_id)
+
+                    try:
+                        output, agent_metadata = execute_agent(
+                            self.settings,
+                            AgentConfig.model_validate(config),
+                            resolved.get(config["input_field"]),
+                            check_active=check_active,
+                        )
+                    except AgentExecutionError as error:
+                        agent_metadata = error.metadata
+                        raise
+                elif node.type == "http":
+                    if self.settings is None:
+                        raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE)
+                    try:
+                        connection = ConnectionService(self.database, self.settings).authorize(
+                            owner_id, UUID(config["connection_id"])
+                        )
+                    except ConnectionUnavailableError:
+                        raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE) from None
+                    output = get_json(connection)
+                elif node.type == "groq":
                     value = resolved.get(config["input_field"])
                     if not isinstance(value, str) or not value.strip() or self.settings is None:
                         raise NodeExecutionError()
@@ -130,9 +174,25 @@ class WorkflowRunner:
                     if len(prompt) > 4000:
                         raise NodeExecutionError()
                     try:
-                        output = copy_payload(complete(self.settings, prompt))
-                    except GroqError:
-                        raise NodeExecutionError() from None
+                        result = complete(self.settings, prompt)
+                        provider_metadata = result.get("metadata")
+                        output = copy_payload(
+                            {"model": result["model"], "content": result["content"]}
+                        )
+                    except GroqError as error:
+                        provider_metadata = error.metadata
+                        raise NodeExecutionError(FailureCode(error.code)) from None
+                elif node.type in {"classify", "extract"}:
+                    if self.settings is None:
+                        raise NodeExecutionError()
+                    prompt = prepare(node.type, config, resolved.get(config["input_field"]))
+                    try:
+                        result = complete(self.settings, prompt, json_mode=True)
+                    except GroqError as error:
+                        provider_metadata = error.metadata
+                        raise NodeExecutionError(FailureCode(error.code)) from None
+                    provider_metadata = result.get("metadata")
+                    output = copy_payload(validate(node.type, config, result))
                 else:
                     output = copy_payload(
                         execute_node(
@@ -142,7 +202,9 @@ class WorkflowRunner:
                 following = next_node_id(node, output)
                 if following is not None and (following in visited or following not in nodes):
                     raise NodeExecutionError(FailureCode.INTERNAL_FAILURE)
-                return output, following, attempt_id
+                return output, following, attempt_id, provider_metadata, agent_metadata
+            except _Cancelled:
+                raise
             except NodeExecutionError as error:
                 code = error.code
             except Exception:
@@ -160,6 +222,8 @@ class WorkflowRunner:
                 attempt_revision=1,
                 code=code,
                 terminal=not retry,
+                provider_metadata=provider_metadata,
+                agent_metadata=agent_metadata,
             )
             if not retry:
                 return None
@@ -230,7 +294,7 @@ class WorkflowRunner:
             )
             if result is None:
                 return
-            output, following, attempt_id = result
+            output, following, attempt_id, provider_metadata, agent_metadata = result
             with self.database.unit_of_work() as session:
                 repository = ExecutionRepository(session)
                 self._check(repository, run_id, owner_id)
@@ -242,6 +306,8 @@ class WorkflowRunner:
                     expected_revision=1,
                     target=NodeStatus.SUCCEEDED,
                     output=output,
+                    provider_metadata=provider_metadata,
+                    agent_metadata=agent_metadata,
                 )
                 if node.type == "end":
                     for other in plan.nodes:

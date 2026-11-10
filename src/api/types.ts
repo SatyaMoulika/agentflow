@@ -1,5 +1,33 @@
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type JsonObject = Record<string, Json>;
+export type ConnectionAuth = 'none' | 'bearer' | 'api_key';
+export interface PlannerConnection {
+  id: string;
+  name: string;
+  endpoint_url: string;
+}
+export interface ProviderMetadata {
+  provider: 'groq';
+  requested_model: string;
+  model?: string | null;
+  duration_ms: number;
+  usage?: {
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+  } | null;
+  finish_reason?: string | null;
+  error_code?: string | null;
+  retry_after_seconds?: number | null;
+}
+export interface HttpConnection {
+  id: string;
+  name: string;
+  endpoint_url: string;
+  auth_type: ConnectionAuth;
+  created_at: string;
+  revoked_at: string | null;
+}
 export interface User {
   id: string;
   email: string;
@@ -42,6 +70,12 @@ export interface WorkflowProposal {
   sample_input: JsonObject;
   model: string;
   repair_attempted: boolean;
+  connections?: PlannerConnection[];
+  provider_calls?: ProviderMetadata[];
+}
+export interface WorkflowEditProposal extends WorkflowProposal {
+  base_version_id: string;
+  base_version_number: number;
 }
 export interface WorkflowItem {
   id: string;
@@ -109,6 +143,12 @@ export interface NodeAttempt extends History {
   node_id: string;
   attempt_number: number;
   duration_ms: number | null;
+  provider?: ProviderMetadata | null;
+  agent?: {
+    tool_rounds: number;
+    provider_calls: ProviderMetadata[];
+    failure_reason?: string | null;
+  } | null;
   retry?: {
     scheduled_at: string;
     due_at: string;
@@ -128,6 +168,17 @@ export interface RunDetail extends History {
   event_sequence: number;
   version: Version;
   node_runs: NodeAttempt[];
+}
+export interface ExecutionEvent {
+  sequence: number;
+  node_run_id: string | null;
+  event_type: string;
+  payload: JsonObject;
+  created_at: string;
+}
+export interface ExecutionEventPage {
+  items: ExecutionEvent[];
+  next_after_sequence: number;
 }
 export interface RunItem {
   execution_mode?: 'synchronous' | 'background';

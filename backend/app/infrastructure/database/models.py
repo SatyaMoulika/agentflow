@@ -3,6 +3,7 @@
 from app.modules.auth.models import User
 from app.modules.auth.refresh_models import RefreshSession, RefreshToken
 from app.modules.claims.models import RunClaim
+from app.modules.connections.models import Connection
 from app.modules.executions.dispatch_models import WorkflowDispatch
 from app.modules.executions.models import ExecutionEvent, NodeRun, RunCommand, WorkflowRun
 from app.modules.executions.retry_models import NodeRetry
@@ -10,6 +11,7 @@ from app.modules.outbox.models import OutboxMessage
 from app.modules.workflows.models import Workflow, WorkflowStatus, WorkflowVersion
 
 __all__ = [
+    "Connection",
     "User",
     "WorkflowRun",
     "WorkflowDispatch",

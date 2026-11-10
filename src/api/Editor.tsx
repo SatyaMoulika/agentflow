@@ -13,7 +13,10 @@ import { Braces, Download, Play, Plus, Save, ShieldCheck } from 'lucide-react';
 import { Badge, Button, JsonViewer, Modal, PageHeader } from '../components/ui';
 import { api } from './client';
 import Canvas from './Canvas';
+import { ConnectionSelector, PlannerConnectionPicker } from './Connections';
+import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import { Failure, Pending } from './common';
+import { summarizeProposal } from './proposalDiff';
 import {
   defaultNode,
   downloadDraft,
@@ -22,7 +25,13 @@ import {
   starterDefinition,
 } from './graph';
 import { useScope } from './session';
-import type { CatalogItem, Definition, Validation, WorkflowDetail } from './types';
+import type {
+  CatalogItem,
+  Definition,
+  Validation,
+  WorkflowDetail,
+  WorkflowEditProposal,
+} from './types';
 
 function JsonField<T>({
   label,
@@ -120,6 +129,9 @@ function Designer({
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
   const [report, setReport] = useState<Validation | null>(null);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [proposalConnections, setProposalConnections] = useState<string[]>([]);
+  const [editProposal, setEditProposal] = useState<WorkflowEditProposal | null>(null);
   const [input, setInput] = useState('{}');
   const [maxAttempts, setMaxAttempts] = useState(1);
   const pendingRun = useRef<{ signature: string; key: string } | null>(null);
@@ -170,6 +182,7 @@ function Designer({
     setInvalid((old) => ({ ...old, [field]: !valid }));
   const edit = (next: Definition) => {
     setDefinition(next);
+    setEditProposal(null);
     setReport(null);
     setNotice('');
   };
@@ -196,6 +209,7 @@ function Designer({
       setName(next.name);
       setDescription(next.description);
       setDefinition(structuredClone(next.version!.definition));
+      setEditProposal(null);
       setNotice(`Saved version ${next.current_version_number} · ${date(next.updated_at)}`);
       void cache.invalidateQueries({ queryKey: [...scope, 'workflows'] });
     } catch (failure) {
@@ -209,6 +223,26 @@ function Designer({
     setError(null);
     try {
       setReport(await api.validate(saved.id, parseDefinition(JSON.stringify(definition))));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy('');
+    }
+  }
+  async function proposeEdit() {
+    if (!saved.current_version_id || dirty || !editPrompt.trim()) return;
+    setBusy('proposal');
+    setError(null);
+    setEditProposal(null);
+    try {
+      setEditProposal(
+        await api.generateWorkflowEdit(
+          saved.id,
+          saved.current_version_id,
+          editPrompt,
+          proposalConnections,
+        ),
+      );
     } catch (failure) {
       setError(failure);
     } finally {
@@ -263,6 +297,7 @@ function Designer({
       setName(next.name);
       setDescription(next.description);
       setDefinition(structuredClone(next.version?.definition || starterDefinition()));
+      setEditProposal(null);
       setSelected(null);
       setInvalid({});
       setSource(false);
@@ -353,21 +388,41 @@ function Designer({
             })
           }
         />
-        <JsonField
-          label="Configuration (JSON)"
-          value={selectedNode.config}
-          parse={parseObject}
-          disabled={disabled}
-          onValidity={validity('config')}
-          onValue={(value) =>
-            edit({
-              ...definition,
-              nodes: definition.nodes.map((n) =>
-                n.id === selectedNode.id ? { ...n, config: value } : n,
-              ),
-            })
-          }
-        />
+        {selectedNode.type === 'http' && (
+          <ConnectionSelector
+            value={
+              typeof selectedNode.config.connection_id === 'string'
+                ? selectedNode.config.connection_id
+                : ''
+            }
+            disabled={disabled || invalidJson}
+            onChange={(id) =>
+              edit({
+                ...definition,
+                nodes: definition.nodes.map((node) =>
+                  node.id === selectedNode.id ? { ...node, config: { connection_id: id } } : node,
+                ),
+              })
+            }
+          />
+        )}
+        {selectedNode.type !== 'http' && (
+          <JsonField
+            label="Configuration (JSON)"
+            value={selectedNode.config}
+            parse={parseObject}
+            disabled={disabled}
+            onValidity={validity('config')}
+            onValue={(value) =>
+              edit({
+                ...definition,
+                nodes: definition.nodes.map((n) =>
+                  n.id === selectedNode.id ? { ...n, config: value } : n,
+                ),
+              })
+            }
+          />
+        )}
         <JsonField
           label="Input mapping (JSON)"
           value={selectedNode.input_mapping || {}}
@@ -485,6 +540,119 @@ function Designer({
           />
         </div>
       </section>
+      {!readOnly && (
+        <section className="card api-panel">
+          <h2>Propose changes with AI</h2>
+          <p className="muted">
+            Your request, saved definition, and metadata for existing or selected HTTP connections
+            are sent to Groq. Credentials stay on the server. Save any current changes first. Review
+            the proposal before applying it to the editor.
+          </p>
+          <label className="label" htmlFor="edit-prompt">
+            Requested changes
+          </label>
+          <textarea
+            id="edit-prompt"
+            className="input"
+            rows={3}
+            maxLength={2000}
+            value={editPrompt}
+            disabled={!!busy}
+            onChange={(event) => {
+              setEditPrompt(event.target.value);
+              setEditProposal(null);
+            }}
+          />
+          <PlannerConnectionPicker
+            value={proposalConnections}
+            disabled={!!busy}
+            onChange={(ids) => {
+              setProposalConnections(ids);
+              setEditProposal(null);
+            }}
+          />
+          <Button
+            disabled={!!busy || dirty || !saved.current_version_id || !editPrompt.trim()}
+            loading={busy === 'proposal'}
+            onClick={() => void proposeEdit()}
+          >
+            Generate edit proposal
+          </Button>
+          {dirty && (
+            <p className="muted">Save or discard your edits before generating a proposal.</p>
+          )}
+          {editProposal && (
+            <div>
+              <h3>Review proposal for version {editProposal.base_version_number}</h3>
+              <p>{editProposal.message}</p>
+              <ConnectionReview connections={editProposal.connections} />
+              {editProposal.provider_calls?.map((metadata, index) => (
+                <ProviderDetails key={index} metadata={metadata} />
+              ))}
+              {editProposal.definition && (
+                <>
+                  <p className="muted">
+                    The proposed definition replaces the editor draft when applied. The workflow
+                    name and description stay unchanged. Save separately to create a new version.
+                  </p>
+                  {saved.version &&
+                    (() => {
+                      const changes = summarizeProposal(
+                        saved.version.definition,
+                        editProposal.definition,
+                      );
+                      return (
+                        <section aria-label="Summary of proposed changes">
+                          <h4>Changes to review</h4>
+                          {(['nodes', 'edges'] as const).map((kind) => (
+                            <div key={kind}>
+                              <strong>{kind === 'nodes' ? 'Nodes' : 'Connections'}</strong>
+                              {(['added', 'removed', 'changed'] as const).map((action) => (
+                                <p key={action}>
+                                  {action}: {changes[kind][action].join(', ') || 'none'}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                          {changes.otherChanged && <p>Other definition properties changed.</p>}
+                          <p className="muted">
+                            Compare the full definitions below to review the details.
+                          </p>
+                        </section>
+                      );
+                    })()}
+                  <details>
+                    <summary>Current saved definition</summary>
+                    <JsonViewer data={saved.version?.definition || {}} />
+                  </details>
+                  <details open>
+                    <summary>Proposed definition</summary>
+                    <JsonViewer data={editProposal.definition} />
+                  </details>
+                  <Button
+                    disabled={
+                      !!busy || dirty || saved.current_version_id !== editProposal.base_version_id
+                    }
+                    onClick={() => {
+                      if (!editProposal.definition) return;
+                      edit(structuredClone(editProposal.definition));
+                      setSelected(null);
+                      setInvalid({});
+                      setEpoch((value) => value + 1);
+                      setEditProposal(null);
+                      setNotice(
+                        'Proposal applied to the unsaved editor draft. Review and save when ready.',
+                      );
+                    }}
+                  >
+                    Apply to editor
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      )}
       <div className="api-section">
         <div className="api-actions">
           <Badge status={saved.status} />
@@ -664,10 +832,25 @@ function Designer({
             Run saved version
           </Button>
         </div>
-        {definition.nodes.some((node) => node.type === 'groq') && (
+        {definition.nodes.some((node) =>
+          ['groq', 'classify', 'extract', 'agent'].includes(node.type),
+        ) && (
           <p className="api-notice">
-            Running this workflow sends each Groq node’s instruction and selected input field to
-            Groq. Inputs and responses are stored in execution history.
+            Running this workflow sends the selected input and node configuration to Groq. Inputs
+            and responses are stored in execution history.
+          </p>
+        )}
+        {definition.nodes.some((node) => node.type === 'agent') && (
+          <p className="api-notice">
+            Calculator agents may make several Groq requests within their tool limit. They run
+            synchronously, with no automatic retry or recovery. Review their answer and tool
+            results.
+          </p>
+        )}
+        {definition.nodes.some((node) => node.type === 'http') && (
+          <p className="api-notice">
+            HTTP nodes contact their selected endpoints and store JSON responses. HTTP workflows run
+            synchronously and have no automatic retry or recovery.
           </p>
         )}
         <p className="muted">

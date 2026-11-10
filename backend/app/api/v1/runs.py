@@ -3,14 +3,34 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    Security,
+)
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
+from starlette.concurrency import run_in_threadpool
 
-from app.api.dependencies import get_current_user, get_database, get_settings
+from app.api.dependencies import (
+    bearer,
+    get_access_tokens,
+    get_current_user,
+    get_database,
+    get_settings,
+)
 from app.core.config import Settings
 from app.core.exceptions import REQUEST_ID_HEADER, ErrorResponse, error_response
+from app.core.tokens import AccessTokens
 from app.infrastructure.database.session import Database
 from app.modules.auth.schemas import UserResponse
+from app.modules.executions.event_stream import stream_events
 from app.modules.executions.exceptions import (
     ExecutionConflictError,
     ExecutionNotFoundError,
@@ -18,6 +38,7 @@ from app.modules.executions.exceptions import (
     WorkflowNotExecutableError,
 )
 from app.modules.executions.schemas import (
+    ExecutionEventPage,
     RunCreateRequest,
     RunListParams,
     RunPage,
@@ -181,6 +202,68 @@ def retry_workflow_run(
     response.headers["Cache-Control"] = "no-store"
     response.status_code = 202 if result.execution_mode == "background" else 201
     return result
+
+
+@router.get(
+    "/runs/{run_id}/events",
+    response_model=ExecutionEventPage,
+    operation_id="list_workflow_run_events",
+    summary="Read ordered events for an owned run",
+    description="Poll with next_after_sequence to continue from the last returned event.",
+)
+def list_workflow_run_events(
+    run_id: UUID,
+    response: Response,
+    user: CurrentUser,
+    database: DatabaseResource,
+    after_sequence: Annotated[int, Query(ge=0, le=9223372036854775807)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> ExecutionEventPage:
+    result = ExecutionService(database).events(
+        run_id=run_id, owner_id=user.id, after_sequence=after_sequence, limit=limit
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@router.get(
+    "/runs/{run_id}/events/stream",
+    operation_id="stream_workflow_run_events",
+    summary="Stream authorized execution events with sequence replay",
+    description="Reconnect with Last-Event-ID. Connections close periodically to reauthenticate.",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}}},
+)
+async def stream_workflow_run_events(
+    run_id: UUID,
+    request: Request,
+    user: CurrentUser,
+    database: DatabaseResource,
+    tokens: Annotated[AccessTokens, Depends(get_access_tokens)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer)],
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID", max_length=19)] = None,
+) -> StreamingResponse:
+    if credentials is None:
+        raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    if len(request.headers.getlist("last-event-id")) > 1:
+        raise HTTPException(status_code=422)
+    if last_event_id is not None and (
+        not last_event_id.isascii()
+        or not last_event_id.isdecimal()
+        or int(last_event_id) > 9223372036854775807
+    ):
+        raise HTTPException(status_code=422)
+    cursor = int(last_event_id) if last_event_id is not None else 0
+    page = await run_in_threadpool(
+        lambda: ExecutionService(database).events(
+            run_id=run_id, owner_id=user.id, after_sequence=cursor, limit=100
+        )
+    )
+    return StreamingResponse(
+        stream_events(database, run_id, user.id, credentials.credentials, tokens, page),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get(

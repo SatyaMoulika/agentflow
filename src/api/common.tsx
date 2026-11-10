@@ -23,6 +23,12 @@ export function Failure({ error, retry }: { error: unknown; retry?: () => void }
         </p>
       )}
       {problem?.requestId && <small>Request ID: {problem.requestId}</small>}
+      {problem?.retryAfterSeconds && (
+        <p>
+          Wait at least {problem.retryAfterSeconds} seconds before trying again. Requests are not
+          retried automatically.
+        </p>
+      )}
       {problem?.location && (
         <Link to={problem.location.replace('/api/v1/runs/', '/executions/')}>
           Inspect the retained run
@@ -53,10 +59,10 @@ export function Pages({
         {total} records · Page {page} of {Math.max(1, Math.ceil(total / size))}
       </span>
       <div className="api-actions">
-        <Button disabled={page <= 1} onClick={() => onChange(page - 1)}>
+        <Button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)}>
           Previous
         </Button>
-        <Button disabled={page * size >= total} onClick={() => onChange(page + 1)}>
+        <Button type="button" disabled={page * size >= total} onClick={() => onChange(page + 1)}>
           Next
         </Button>
       </div>

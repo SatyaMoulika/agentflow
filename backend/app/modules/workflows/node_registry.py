@@ -7,19 +7,50 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError
 
 from app.modules.workflows.node_configs import (
+    AgentConfig,
     CalculatorConfig,
+    ClassifyConfig,
     ConditionConfig,
     EndConfig,
+    ExtractConfig,
     GroqConfig,
+    HttpConfig,
+    JsonParserConfig,
     ManualConfig,
     MergeConfig,
     TransformConfig,
 )
 
-NodeTypeId = Literal["manual", "transform", "condition", "calculator", "merge", "end", "groq"]
+NodeTypeId = Literal[
+    "agent",
+    "http",
+    "manual",
+    "transform",
+    "condition",
+    "calculator",
+    "merge",
+    "end",
+    "groq",
+    "json_parser",
+    "classify",
+    "extract",
+]
 NodeCategory = Literal["trigger", "logic", "tool"]
 EXECUTION_READY_TYPES: frozenset[NodeTypeId] = frozenset(
-    {"manual", "transform", "condition", "calculator", "merge", "end", "groq"}
+    {
+        "agent",
+        "http",
+        "manual",
+        "transform",
+        "condition",
+        "calculator",
+        "merge",
+        "end",
+        "groq",
+        "json_parser",
+        "classify",
+        "extract",
+    }
 )
 
 
@@ -65,6 +96,22 @@ class _Registration:
 
 _REGISTRATIONS = (
     _Registration(
+        "agent",
+        "Calculator Agent",
+        "tool",
+        "Bounded Groq calculator tool loop. Synchronous; no automatic retry or recovery.",
+        ("default",),
+        TypeAdapter(AgentConfig),
+    ),
+    _Registration(
+        "http",
+        "HTTP GET",
+        "tool",
+        "Read JSON from a fixed public HTTPS connection. No automatic retry or recovery.",
+        ("default",),
+        TypeAdapter(HttpConfig),
+    ),
+    _Registration(
         "manual",
         "Manual Trigger",
         "trigger",
@@ -103,6 +150,30 @@ _REGISTRATIONS = (
         "Send a selected input field and instruction to the configured Groq model.",
         ("default",),
         TypeAdapter(GroqConfig),
+    ),
+    _Registration(
+        "classify",
+        "Classify text with Groq",
+        "tool",
+        "Choose one configured label for a text field using Groq.",
+        ("default",),
+        TypeAdapter(ClassifyConfig),
+    ),
+    _Registration(
+        "extract",
+        "Extract fields with Groq",
+        "tool",
+        "Extract configured fields from a text field using Groq.",
+        ("default",),
+        TypeAdapter(ExtractConfig),
+    ),
+    _Registration(
+        "json_parser",
+        "Parse JSON text",
+        "tool",
+        "Parse a selected text field into a bounded JSON object.",
+        ("default",),
+        TypeAdapter(JsonParserConfig),
     ),
     _Registration(
         "merge",

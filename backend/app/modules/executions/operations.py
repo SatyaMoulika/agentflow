@@ -106,7 +106,16 @@ def _calculator(config: dict[str, Any]) -> dict[str, int | float]:
         _number(operand["value"] if operand["kind"] == "literal" else operand["path"])
         for operand in config["operands"]
     ]
-    operation = config["operation"]
+    return calculate(config["operation"], values)
+
+
+def calculate(operation: str, values: list[int | float]) -> dict[str, int | float]:
+    """Shared bounded arithmetic for deterministic nodes and the agent's only tool."""
+    if operation not in {"add", "subtract", "multiply", "divide"} or not 2 <= len(values) <= 20:
+        raise NodeExecutionError()
+    if operation in {"subtract", "divide"} and len(values) != 2:
+        raise NodeExecutionError()
+    values = [_number(value) for value in values]
     result = values[0]
     for value in values[1:]:
         if operation == "add":
@@ -138,6 +147,25 @@ def execute_node(
         return _condition(config)
     if node.type == "calculator":
         return _calculator(config)
+    if node.type == "json_parser":
+        value = input_data.get(config["input_field"])
+        if not isinstance(value, str):
+            raise NodeExecutionError()
+        try:
+            if len(value.encode("utf-8")) > 65536:
+                raise ValueError()
+
+            def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+                result: dict[str, Any] = {}
+                for key, item in pairs:
+                    if key in result:
+                        raise ValueError()
+                    result[key] = item
+                return result
+
+            return copy_payload(json.loads(value, object_pairs_hook=unique_pairs))
+        except (ValueError, UnicodeError, RecursionError, InvalidExecutionPayloadError):
+            raise NodeExecutionError() from None
     if node.type == "transform":
         if config["operation"] == "identity":
             return copy_payload(input_data)

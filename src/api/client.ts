@@ -1,7 +1,11 @@
 import type {
   Catalog,
+  ConnectionAuth,
   Definition,
+  ExecutionEventPage,
   JsonObject,
+  HttpConnection,
+  ProviderMetadata,
   LoginResult,
   Page,
   RunDetail,
@@ -9,6 +13,7 @@ import type {
   User,
   Validation,
   WorkflowDetail,
+  WorkflowEditProposal,
   WorkflowProposal,
   WorkflowItem,
 } from './types';
@@ -20,6 +25,7 @@ export class ApiError extends Error {
     public code = 'NETWORK_ERROR',
     public requestId?: string,
     public location?: string,
+    public retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -140,14 +146,14 @@ export class ApiClient {
         );
     }
   }
-  private async raw<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private async raw<T>(path: string, options: RequestInit = {}, stream = false): Promise<T> {
     let response: Response;
     try {
       response = await this.transport(`/api/v1${path}`, {
         ...options,
         credentials: 'same-origin',
         headers: {
-          Accept: 'application/json',
+          Accept: stream ? 'text/event-stream' : 'application/json',
           ...(options.body ? { 'Content-Type': 'application/json' } : {}),
           ...options.headers,
         },
@@ -160,6 +166,7 @@ export class ApiClient {
       const payload = await response.json().catch(() => null);
       const id = payload?.request_id;
       const location = response.headers.get('Location');
+      const wait = response.headers.get('Retry-After');
       throw new ApiError(
         typeof payload?.error?.message === 'string'
           ? payload.error.message
@@ -168,8 +175,12 @@ export class ApiClient {
         payload?.error?.code || 'HTTP_ERROR',
         typeof id === 'string' && /^req_[a-f0-9]{32}$/.test(id) ? id : undefined,
         location && /^\/api\/v1\/runs\/[a-f0-9-]{36}$/.test(location) ? location : undefined,
+        wait && /^[0-9]{1,5}$/.test(wait) && Number(wait) > 0 && Number(wait) <= 86400
+          ? Number(wait)
+          : undefined,
       );
     }
+    if (stream) return response as T;
     return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
   }
   private proof() {
@@ -257,17 +268,21 @@ export class ApiClient {
       this.broadcast('ended');
     });
   }
-  async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(path: string, options: RequestInit = {}, stream = false): Promise<T> {
     const generation = this.state.generation;
     const startingToken = this.token;
     const send = () =>
-      this.raw<T>(path, {
-        ...options,
-        headers: {
-          ...options.headers,
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      this.raw<T>(
+        path,
+        {
+          ...options,
+          headers: {
+            ...options.headers,
+            ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+          },
         },
-      });
+        stream,
+      );
     let result: T;
     try {
       result = await send();
@@ -300,16 +315,49 @@ const query = (values: Record<string, string | number | undefined>) => {
   return params.size ? `?${params}` : '';
 };
 export const api = {
+  connections: (page = 1, signal?: AbortSignal) =>
+    client.request<Page<HttpConnection>>(`/connections${query({ page, page_size: 20 })}`, {
+      signal,
+    }),
+  createConnection: (data: {
+    name: string;
+    endpoint_url: string;
+    auth_type: ConnectionAuth;
+    secret?: string;
+  }) =>
+    client.request<HttpConnection>('/connections', { method: 'POST', body: JSON.stringify(data) }),
+  revokeConnection: (id: string) =>
+    client.request<void>(`/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   me: () => client.request<User>('/auth/me'),
   groqCompletion: (prompt: string) =>
-    client.request<{ model: string; content: string }>('/ai/completions', {
-      method: 'POST',
-      body: JSON.stringify({ prompt }),
-    }),
-  generateWorkflow: (prompt: string) =>
+    client.request<{ model: string; content: string; metadata?: ProviderMetadata | null }>(
+      '/ai/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({ prompt }),
+      },
+    ),
+  generateWorkflow: (prompt: string, connectionIds: string[] = []) =>
     client.request<WorkflowProposal>('/workflows/generate', {
       method: 'POST',
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        prompt,
+        ...(connectionIds.length ? { connection_ids: connectionIds } : {}),
+      }),
+    }),
+  generateWorkflowEdit: (
+    id: string,
+    baseVersionId: string,
+    prompt: string,
+    connectionIds: string[] = [],
+  ) =>
+    client.request<WorkflowEditProposal>(`/workflows/${encodeURIComponent(id)}/edit-proposal`, {
+      method: 'POST',
+      body: JSON.stringify({
+        base_version_id: baseVersionId,
+        prompt,
+        ...(connectionIds.length ? { connection_ids: connectionIds } : {}),
+      }),
     }),
   workflows: (values: Record<string, string | number | undefined> = {}, signal?: AbortSignal) =>
     client.request<Page<WorkflowItem>>(`/workflows${query(values)}`, { signal }),
@@ -359,4 +407,18 @@ export const api = {
     client.request<Page<RunItem>>(`/runs${query(values)}`, { signal }),
   runDetail: (id: string, signal?: AbortSignal) =>
     client.request<RunDetail>(`/runs/${encodeURIComponent(id)}`, { signal }),
+  runEvents: (id: string, afterSequence: number, signal?: AbortSignal) =>
+    client.request<ExecutionEventPage>(
+      `/runs/${encodeURIComponent(id)}/events${query({ after_sequence: afterSequence, limit: 50 })}`,
+      { signal },
+    ),
+  runEventStream: (id: string, afterSequence: string, signal: AbortSignal) =>
+    client.request<Response>(
+      `/runs/${encodeURIComponent(id)}/events/stream`,
+      {
+        signal,
+        headers: { 'Last-Event-ID': afterSequence },
+      },
+      true,
+    ),
 };

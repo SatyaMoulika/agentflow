@@ -5,11 +5,20 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Activity, ArrowRight, GitBranch, Plus, RefreshCw, Workflow } from 'lucide-react';
 import { Badge, Button, EmptyState, JsonViewer, PageHeader } from '../components/ui';
 import { api } from './client';
+import { EventCursor } from './eventStream';
 import { Failure, Pages, Pending } from './common';
 import { starterDefinition } from './graph';
 import { useScope, useSession } from './session';
 import Canvas from './Canvas';
-import type { RunItem, WorkflowProposal } from './types';
+import HttpConnections, { PlannerConnectionPicker } from './Connections';
+import { ConnectionReview, ProviderDetails } from './ProviderDetails';
+import type {
+  ExecutionEvent,
+  NodeAttempt,
+  ProviderMetadata,
+  RunItem,
+  WorkflowProposal,
+} from './types';
 export function Dashboard() {
   const scope = useScope();
   const workflows = useQuery({
@@ -79,7 +88,8 @@ export function Dashboard() {
         <h2>Build with supported nodes</h2>
         <p className="muted">
           Generate a proposal with AI, or build with manual, transform, condition, calculator, Groq,
-          merge and end nodes. Approvals are not available yet.
+          JSON parser, classify, extract, HTTP GET, merge and end nodes. Approvals are not available
+          yet.
         </p>
       </section>
     </div>
@@ -221,6 +231,7 @@ export function CreateWorkflow() {
   const [prompt, setPrompt] = useState('');
   const [proposal, setProposal] = useState<WorkflowProposal | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [connectionIds, setConnectionIds] = useState<string[]>([]);
   const [generationError, setGenerationError] = useState<unknown>(null);
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -231,7 +242,7 @@ export function CreateWorkflow() {
     setGenerationError(null);
     setProposal(null);
     try {
-      setProposal(await api.generateWorkflow(prompt));
+      setProposal(await api.generateWorkflow(prompt, connectionIds));
     } catch (error) {
       setGenerationError(error);
     } finally {
@@ -295,6 +306,14 @@ export function CreateWorkflow() {
           }}
           placeholder="Create a workflow that drafts a response to a customer support message."
         />
+        <PlannerConnectionPicker
+          value={connectionIds}
+          disabled={generating || busy}
+          onChange={(ids) => {
+            setConnectionIds(ids);
+            setProposal(null);
+          }}
+        />
         <Button
           type="submit"
           variant="primary"
@@ -311,6 +330,10 @@ export function CreateWorkflow() {
             {proposal.status === 'ready' ? 'Review proposal' : 'Cannot generate this workflow yet'}
           </h2>
           <p>{proposal.message}</p>
+          <ConnectionReview connections={proposal.connections} />
+          {proposal.provider_calls?.map((metadata, index) => (
+            <ProviderDetails key={index} metadata={metadata} />
+          ))}
           {proposal.status === 'ready' && proposal.definition && (
             <>
               <h3>{proposal.name}</h3>
@@ -525,6 +548,145 @@ export function RunList() {
     </div>
   );
 }
+function eventDescription(event: ExecutionEvent, attempts: NodeAttempt[]) {
+  const attempt = attempts.find((item) => item.id === event.node_run_id);
+  const node = attempt?.node_id || event.payload.node_id;
+  const target = event.payload.to_status;
+  switch (event.event_type) {
+    case 'run.created':
+      return 'Execution created';
+    case 'run.status_changed':
+      return `Execution ${typeof target === 'string' ? target : 'status changed'}`;
+    case 'node.created':
+      return `Node ${typeof node === 'string' ? node : 'attempt'} created`;
+    case 'node.status_changed':
+      return `Node ${typeof node === 'string' ? node : 'attempt'} ${typeof target === 'string' ? target : 'status changed'}`;
+    case 'node.retry_scheduled':
+      return `Retry scheduled for ${typeof node === 'string' ? node : 'node'}`;
+    default:
+      return event.event_type;
+  }
+}
+
+function ExecutionEvents({
+  runId,
+  active,
+  sequence,
+  attempts,
+}: {
+  runId: string;
+  active: boolean;
+  sequence: number;
+  attempts: NodeAttempt[];
+}) {
+  const scope = useScope();
+  const scopeUser = scope[0];
+  const scopeGeneration = scope[1];
+  const [cursors, setCursors] = useState([0]);
+  const cursor = cursors[cursors.length - 1];
+  const events = useQuery({
+    queryKey: [...scope, 'run-events', runId, cursor],
+    queryFn: ({ signal }) => api.runEvents(runId, cursor, signal),
+    refetchInterval: active ? 1500 : false,
+  });
+  const cache = useQueryClient();
+  useEffect(() => {
+    void cache.invalidateQueries({ queryKey: [scopeUser, scopeGeneration, 'run-events', runId] });
+  }, [cache, scopeUser, scopeGeneration, runId, sequence]);
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    let lastId = '0';
+    let retryDelay = 1500;
+    async function listen() {
+      while (!controller.signal.aborted) {
+        try {
+          const response = await api.runEventStream(runId, lastId, controller.signal);
+          if (
+            !response.body ||
+            !response.headers.get('content-type')?.startsWith('text/event-stream')
+          ) {
+            await response.body?.cancel();
+            throw new Error('Event stream unavailable');
+          }
+          retryDelay = 1500;
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          const cursor = new EventCursor(lastId);
+          try {
+            while (!controller.signal.aborted) {
+              const chunk = await reader.read();
+              if (chunk.done) break;
+              if (cursor.push(decoder.decode(chunk.value, { stream: true }))) {
+                lastId = cursor.id;
+                void cache.invalidateQueries({
+                  queryKey: [scopeUser, scopeGeneration, 'run-events', runId],
+                });
+                void cache.invalidateQueries({
+                  queryKey: [scopeUser, scopeGeneration, 'run', runId],
+                });
+              }
+            }
+          } finally {
+            await reader.cancel().catch(() => undefined);
+          }
+        } catch {
+          // Existing polling continues during a disconnection; reconnect uses the last sequence.
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
+        if (!controller.signal.aborted)
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
+    }
+    void listen();
+    return () => controller.abort();
+  }, [active, cache, runId, scopeUser, scopeGeneration]);
+  return (
+    <section className="card api-panel">
+      <h2>Execution events</h2>
+      <p className="muted">
+        Recorded activity in execution order. Active runs update automatically.
+      </p>
+      {events.isPending ? <Pending /> : null}
+      {events.isError ? <Failure error={events.error} retry={() => void events.refetch()} /> : null}
+      {events.data && (
+        <>
+          {events.data.items.length === 0 ? (
+            <p className="muted">No events on this page.</p>
+          ) : (
+            <ol className="api-event-list">
+              {events.data.items.map((event) => (
+                <li key={event.sequence}>
+                  <strong>{eventDescription(event, attempts)}</strong>{' '}
+                  <span className="muted">
+                    · {date(event.created_at)} · Event {event.sequence}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+          <div className="api-actions">
+            <Button
+              disabled={cursors.length === 1}
+              onClick={() => setCursors(cursors.slice(0, -1))}
+            >
+              Previous events
+            </Button>
+            <Button
+              disabled={
+                events.data.next_after_sequence >= sequence || events.data.items.length === 0
+              }
+              onClick={() => setCursors([...cursors, events.data.next_after_sequence])}
+            >
+              Next events
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function RunView() {
   const { executionId = '' } = useParams();
   const scope = useScope();
@@ -552,7 +714,9 @@ export function RunView() {
   if (run.isPending) return <Pending />;
   if (run.isError) return <Failure error={run.error} retry={() => void run.refetch()} />;
   const data = run.data;
-  const hasGroq = data.version.definition.nodes.some((node) => node.type === 'groq');
+  const hasExternalCall = data.version.definition.nodes.some((node) =>
+    ['groq', 'classify', 'extract', 'http', 'agent'].includes(node.type),
+  );
   async function command(kind: 'retry' | 'cancel') {
     if (
       kind === 'cancel' &&
@@ -601,7 +765,7 @@ export function RunView() {
             <Button asChild>
               <Link to={`/executions?workflow_id=${data.workflow_id}`}>Workflow history</Link>
             </Button>
-            {['failed', 'cancelled'].includes(data.status) && !hasGroq && (
+            {['failed', 'cancelled'].includes(data.status) && !hasExternalCall && (
               <Button
                 disabled={!!commandBusy}
                 loading={commandBusy === 'retry'}
@@ -638,10 +802,10 @@ export function RunView() {
           This page updates automatically while the execution is active.
         </p>
       )}
-      {hasGroq && ['failed', 'cancelled'].includes(data.status) && (
+      {hasExternalCall && ['failed', 'cancelled'].includes(data.status) && (
         <p className="api-notice">
-          Full-workflow retry is unavailable for Groq runs. Start a new run explicitly if you want
-          to send the prompt again.
+          Full-workflow retry is unavailable for workflows with external calls. Start a new run
+          explicitly to call the provider or endpoint again.
         </p>
       )}
       <section className="card api-panel">
@@ -674,6 +838,13 @@ export function RunView() {
         </small>
       </section>
       <Canvas definition={data.version.definition} statuses={statuses} />
+      <ExecutionEvents
+        key={executionId}
+        runId={executionId}
+        active={['queued', 'running', 'waiting_approval'].includes(data.status)}
+        sequence={data.event_sequence}
+        attempts={data.node_runs}
+      />
       <div className="api-two-columns">
         <section className="card api-panel">
           <h2>Run input</h2>
@@ -717,6 +888,20 @@ export function RunView() {
             )}
             <div className="api-two-columns">
               <div>
+                <ProviderDetails metadata={row.provider} />
+                {row.agent && (
+                  <section aria-label="Agent execution details">
+                    <h3>Calculator agent</h3>
+                    <p>
+                      Completed calculator calls: {row.agent.tool_rounds} · Groq requests:{' '}
+                      {row.agent.provider_calls.length}
+                    </p>
+                    {row.agent.failure_reason && <p>Agent stopped: {row.agent.failure_reason}</p>}
+                    {row.agent.provider_calls.map((metadata, index) => (
+                      <ProviderDetails key={index} metadata={metadata} />
+                    ))}
+                  </section>
+                )}
                 <h3>Resolved input</h3>
                 <JsonViewer data={row.input} />
               </div>
@@ -729,9 +914,8 @@ export function RunView() {
         ))}
       </section>
       <p className="muted">
-        Live events and traces are not available yet. Cancellation preserves completed history;
-        retry starts the full original workflow for supported pure-node runs. No simulated telemetry
-        is shown.
+        Traces are not available yet. Cancellation preserves completed history; retry starts the
+        full original workflow for supported pure-node runs. No simulated telemetry is shown.
       </p>
     </div>
   );
@@ -756,7 +940,11 @@ export function Integrations() {
   const [prompt, setPrompt] = useState(
     'Summarize the benefits of workflow automation in two sentences.',
   );
-  const [result, setResult] = useState<{ model: string; content: string } | null>(null);
+  const [result, setResult] = useState<{
+    model: string;
+    content: string;
+    metadata?: ProviderMetadata | null;
+  } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
   async function submit(event: FormEvent) {
@@ -774,7 +962,8 @@ export function Integrations() {
   }
   return (
     <div className="api-page">
-      <PageHeader title="Integrations" description="Test the backend connection to Groq." />
+      <PageHeader title="Integrations" description="Manage HTTP connections and test Groq." />
+      <HttpConnections />
       <form className="card api-panel api-form" onSubmit={submit}>
         <h2>Groq</h2>
         <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
@@ -798,6 +987,7 @@ export function Integrations() {
           <section>
             <h3>Response from {result.model}</h3>
             <p style={{ whiteSpace: 'pre-wrap' }}>{result.content}</p>
+            <ProviderDetails metadata={result.metadata} />
           </section>
         )}
         <p className="muted">

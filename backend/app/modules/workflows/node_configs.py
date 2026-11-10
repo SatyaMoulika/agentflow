@@ -58,8 +58,71 @@ class GroqConfig(NodeConfig):
         return value
 
 
+class HttpConfig(NodeConfig):
+    """A fixed, owner-authorized GET endpoint; credentials belong to the connection."""
+
+    connection_id: str = Field(pattern=r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+
+
+class AgentConfig(GroqConfig):
+    """Synchronous Groq agent with only the code-owned calculator capability."""
+
+    max_tool_rounds: int = Field(default=3, ge=1, le=5)
+
+
 class IdentityTransformConfig(NodeConfig):
     operation: Literal["identity"]
+
+
+class JsonParserConfig(NodeConfig):
+    """Parse a selected text field into a JSON object."""
+
+    input_field: str = Field(min_length=1, max_length=200)
+
+    @field_validator("input_field")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Value must not be blank")
+        return value
+
+
+class ClassifyConfig(NodeConfig):
+    input_field: str = Field(min_length=1, max_length=200)
+    labels: list[FieldName] = Field(min_length=2, max_length=20)
+
+    @field_validator("input_field")
+    @classmethod
+    def input_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Value must not be blank")
+        return value
+
+    @field_validator("labels")
+    @classmethod
+    def labels_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(not label.strip() for label in value):
+            raise ValueError("Labels must be unique and nonblank")
+        return value
+
+
+class ExtractConfig(NodeConfig):
+    input_field: str = Field(min_length=1, max_length=200)
+    fields: list[FieldName] = Field(min_length=1, max_length=20)
+
+    @field_validator("input_field")
+    @classmethod
+    def input_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Value must not be blank")
+        return value
+
+    @field_validator("fields")
+    @classmethod
+    def fields_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(not field.strip() for field in value):
+            raise ValueError("Fields must be unique and nonblank")
+        return value
 
 
 class PickFieldsTransformConfig(NodeConfig):

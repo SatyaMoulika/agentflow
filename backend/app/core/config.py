@@ -37,6 +37,7 @@ class Settings(BaseSettings):
         default="openai/gpt-oss-120b", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
     )
     groq_timeout_seconds: int = Field(default=45, ge=1, le=120)
+    connection_encryption_key: SecretStr | None = None
     worker_queue: str = Field(default="agentflow.transport", min_length=1, max_length=80)
     background_execution_enabled: bool = False
     worker_lease_seconds: int = Field(default=30, ge=5, le=3600)
@@ -94,6 +95,18 @@ class Settings(BaseSettings):
         secret = value.get_secret_value() if isinstance(value, SecretStr) else value
         if isinstance(secret, str) and secret != secret.strip():
             raise ValueError("jwt_secret_key must not contain outer whitespace")
+        return value
+
+    @field_validator("connection_encryption_key")
+    @classmethod
+    def validate_connection_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            from app.modules.connections.secrets import ConnectionUnavailableError, cipher
+
+            try:
+                cipher(value)
+            except ConnectionUnavailableError:
+                raise ValueError("connection_encryption_key must be a Fernet key") from None
         return value
 
     @field_validator("jwt_secret_key")

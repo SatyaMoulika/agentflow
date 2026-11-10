@@ -1,18 +1,24 @@
 """Bearer-authenticated metadata, immutable draft saves and owner-scoped historical reads."""
 
+import json
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.api.dependencies import get_current_user, get_database, get_settings
+from app.api.dependencies import get_current_user, get_database, get_database_resource, get_settings
 from app.core.config import Settings
 from app.core.exceptions import REQUEST_ID_HEADER, ErrorResponse, error_response
 from app.infrastructure.database.session import Database
 from app.modules.auth.schemas import UserResponse
-from app.modules.executions.groq_provider import GroqError
+from app.modules.connections.schemas import PlannerConnection
+from app.modules.connections.secrets import ConnectionUnavailableError
+from app.modules.connections.service import ConnectionService
+from app.modules.workflows.exceptions import WorkflowArchivedError, WorkflowVersionConflictError
 from app.modules.workflows.generation import (
+    EditProposalRequest,
+    EditProposalResponse,
     GenerateRequest,
     GenerationResponse,
     InvalidProposalError,
@@ -46,6 +52,35 @@ CurrentUser = Annotated[UserResponse, Depends(get_current_user)]
 DatabaseResource = Annotated[Database, Depends(get_database)]
 
 
+def _planner_catalog(
+    database: Database | None,
+    settings: Settings,
+    owner_id: UUID,
+    selected: list[UUID],
+    definition: dict | None = None,
+) -> list[PlannerConnection]:
+    identities = list(selected)
+    for node in (definition or {}).get("nodes", []):
+        if isinstance(node, dict) and node.get("type") == "http":
+            try:
+                config = node.get("config")
+                value = config.get("connection_id") if isinstance(config, dict) else None
+                if not isinstance(value, str):
+                    raise ValueError()
+                identity = UUID(value)
+            except (ValueError, KeyError, TypeError):
+                raise HTTPException(status_code=422) from None
+            if identity not in identities:
+                identities.append(identity)
+    if len(identities) > 20:
+        raise HTTPException(status_code=422)
+    if not identities:
+        return []
+    if database is None:
+        raise ConnectionUnavailableError()
+    return ConnectionService(database, settings).planner_catalog(owner_id, identities)
+
+
 @router.post(
     "/generate",
     response_model=GenerationResponse,
@@ -67,11 +102,11 @@ def generate_workflow(
     response: Response,
     user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    database: Annotated[Database | None, Depends(get_database_resource)],
 ) -> GenerationResponse | JSONResponse:
+    catalog = _planner_catalog(database, settings, user.id, data.connection_ids)
     try:
-        result = generate(settings, data.prompt)
-    except GroqError as error:
-        raise HTTPException(status_code=error.status) from None
+        result = generate(settings, data.prompt, connections=catalog)
     except InvalidProposalError:
         return error_response(
             request,
@@ -83,7 +118,70 @@ def generate_workflow(
             ),
         )
     response.headers["Cache-Control"] = "no-store"
+    _planner_catalog(database, settings, user.id, data.connection_ids)
     return result
+
+
+@router.post(
+    "/{workflow_id}/edit-proposal",
+    response_model=EditProposalResponse,
+    operation_id="generate_workflow_edit_proposal",
+    summary="Propose changes to an owned saved workflow",
+    description=(
+        "Sends the saved definition and request to Groq. Requires the current version ID; "
+        "the proposal is validated but never saved or executed."
+    ),
+    responses={
+        409: {"model": ErrorResponse, "description": "Archived or stale workflow version"},
+        429: {"model": ErrorResponse, "description": "Groq limit"},
+        502: {"model": ErrorResponse, "description": "Invalid proposal"},
+    },
+)
+def generate_workflow_edit_proposal(
+    workflow_id: UUID,
+    data: EditProposalRequest,
+    request: Request,
+    response: Response,
+    user: CurrentUser,
+    database: DatabaseResource,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> EditProposalResponse | JSONResponse:
+    workflow = WorkflowService(database).get(workflow_id=workflow_id, owner_id=user.id)
+    if workflow.status.value == "archived":
+        raise WorkflowArchivedError()
+    if workflow.current_version_id != data.base_version_id or workflow.version is None:
+        raise WorkflowVersionConflictError()
+    definition = workflow.version.definition
+    if len(json.dumps(definition, ensure_ascii=False).encode("utf-8")) > 32000:
+        return error_response(
+            request,
+            422,
+            headers={"Cache-Control": "no-store"},
+            public_error=(
+                "DEFINITION_TOO_LARGE",
+                "The saved definition is too large for an AI edit proposal.",
+            ),
+        )
+    try:
+        catalog = _planner_catalog(database, settings, user.id, data.connection_ids, definition)
+        result = generate(settings, data.prompt, source_definition=definition, connections=catalog)
+    except InvalidProposalError:
+        return error_response(
+            request,
+            502,
+            headers={"Cache-Control": "no-store"},
+            public_error=(
+                "GENERATION_INVALID",
+                "The generated workflow was invalid. Try a simpler request.",
+            ),
+        )
+    response.headers["Cache-Control"] = "no-store"
+    _planner_catalog(database, settings, user.id, data.connection_ids, definition)
+    return EditProposalResponse(
+        **result.model_dump(),
+        base_version_id=data.base_version_id,
+        base_version_number=workflow.version.version_number,
+    )
 
 
 @router.post(
