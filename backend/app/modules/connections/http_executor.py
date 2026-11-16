@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 import httpcore
 
+from app.core.tracing import traced
 from app.modules.connections.policy import endpoint_url, public_address
 from app.modules.connections.service import AuthorizedConnection
 from app.modules.executions.operations import NodeExecutionError
@@ -80,13 +81,25 @@ class PublicNetworkBackend(httpcore.NetworkBackend):
         addresses = list(dict.fromkeys(str(answer[4][0]) for answer in answers))
         if not addresses or len(addresses) > 16 or any(not public_address(ip) for ip in addresses):
             raise _target_blocked()
-        remaining = self.deadline - monotonic()
-        if remaining <= 0:
-            raise httpcore.ConnectTimeout()
-        stream = httpcore.SyncBackend().connect_tcp(
-            addresses[0], port, min(timeout or 5, remaining), socket_options=socket_options
-        )
-        return _DeadlineStream(stream, self.deadline)
+        # Prefer IPv4 where a host advertises IPv6 but the local route silently stalls.
+        # All addresses were validated above. Only TCP setup may try another address:
+        # no TLS/HTTP request is replayed, and no hostname is resolved a second time.
+        addresses.sort(key=lambda ip: ":" in ip)
+        last_error: httpcore.ConnectError | httpcore.ConnectTimeout | None = None
+        for address in addresses:
+            remaining = self.deadline - monotonic()
+            if remaining <= 0:
+                raise httpcore.ConnectTimeout()
+            try:
+                stream = httpcore.SyncBackend().connect_tcp(
+                    address, port, min(timeout or 5, remaining), socket_options=socket_options
+                )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout) as error:
+                last_error = error
+                continue
+            return _DeadlineStream(stream, self.deadline)
+        assert last_error is not None
+        raise last_error
 
     def connect_unix_socket(
         self,
@@ -106,8 +119,21 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def get_json(connection: AuthorizedConnection) -> dict[str, Any]:
+@traced("agentflow.http_tool")
+def get_json(
+    connection: AuthorizedConnection,
+    *,
+    timeout_seconds: float | None = None,
+    max_response_bytes: int = MAX_RESPONSE_BYTES,
+) -> dict[str, Any]:
     """Do not send workflow input, follow redirects, use proxies, or retry requests."""
+    budget = (
+        OPERATION_SECONDS if timeout_seconds is None else min(OPERATION_SECONDS, timeout_seconds)
+    )
+    if budget <= 0:
+        raise NodeExecutionError(FailureCode.DEADLINE_EXCEEDED)
+    if type(max_response_bytes) is not int or not 1 <= max_response_bytes <= MAX_RESPONSE_BYTES:
+        raise NodeExecutionError(FailureCode.HTTP_REQUEST_FAILED)
     try:
         url = endpoint_url(connection.endpoint_url)
     except ValueError:
@@ -121,7 +147,7 @@ def get_json(connection: AuthorizedConnection) -> dict[str, Any]:
     elif connection.auth_type != "none":
         raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE)
     try:
-        deadline = monotonic() + OPERATION_SECONDS
+        deadline = monotonic() + budget
         host = urlsplit(url).hostname
         assert host is not None
         # A fresh direct pool per call cannot reuse another endpoint's connection.
@@ -150,7 +176,7 @@ def get_json(connection: AuthorizedConnection) -> dict[str, Any]:
                 raise ValueError()
             body = bytearray()
             for chunk in response.iter_stream():
-                if monotonic() >= deadline or len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                if monotonic() >= deadline or len(body) + len(chunk) > max_response_bytes:
                     raise ValueError()
                 body.extend(chunk)
             decoded = json.loads(bytes(body).decode("utf-8"), object_pairs_hook=_unique_object)

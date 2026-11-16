@@ -262,3 +262,100 @@ def test_timeouts_are_static_and_are_not_retried(monkeypatch: pytest.MonkeyPatch
         get_json(AuthorizedConnection("https://api.example.com/", "none"))
     assert error.value.code == FailureCode.DEADLINE_EXCEEDED and calls == [1]
     assert "private-network-details" not in str(error.value)
+
+
+def test_agent_response_limit_is_enforced_by_actual_http_reader(monkeypatch):
+    record = transport(monkeypatch, b'{"text":"' + b"x" * 17000 + b'"}')
+    with pytest.raises(NodeExecutionError) as error:
+        get_json(AuthorizedConnection("https://api.example.com/", "none"), max_response_bytes=16384)
+    assert error.value.code == FailureCode.HTTP_REQUEST_FAILED and len(record["tcp"]) == 1
+
+
+def test_expired_agent_budget_never_connects(monkeypatch):
+    record = transport(monkeypatch, b'{"amount":7}')
+    with pytest.raises(NodeExecutionError) as error:
+        get_json(AuthorizedConnection("https://api.example.com/", "none"), timeout_seconds=0)
+    assert error.value.code == FailureCode.DEADLINE_EXCEEDED and record["tcp"] == []
+
+
+def test_validated_ipv4_is_preferred_over_a_stalled_ipv6_route(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: dns_answers("2606:4700:4700::1111", "8.8.8.8"),
+    )
+
+    def connect(self, host, port, timeout=None, **kwargs):
+        calls.append(host)
+        assert host == "8.8.8.8"
+        return httpcore.MockStream([])
+
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", connect)
+    stream = PublicNetworkBackend("api.example.com", monotonic() + 20).connect_tcp(
+        "api.example.com", 443
+    )
+    stream.close()
+    assert calls == ["8.8.8.8"]
+
+
+def test_tcp_address_fallback_happens_before_one_http_request(monkeypatch):
+    recorded = transport(monkeypatch, b'{"CustomerID":42}')
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *args, **kwargs: dns_answers("8.8.8.8", "1.1.1.1")
+    )
+    original = httpcore.SyncBackend.connect_tcp
+    attempts = []
+
+    def connect(self, host, port, timeout=None, **kwargs):
+        attempts.append(host)
+        if host == "8.8.8.8":
+            raise httpcore.ConnectTimeout()
+        return original(self, host, port, timeout, **kwargs)
+
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", connect)
+    assert get_json(AuthorizedConnection("https://api.example.com/status", "none"))["body"] == {
+        "CustomerID": 42
+    }
+    assert attempts == ["8.8.8.8", "1.1.1.1"]
+    assert b"".join(recorded["requests"]).count(b"GET /status HTTP/1.1") == 1
+
+
+def test_all_tcp_addresses_fail_without_sending_http_or_resolving_again(monkeypatch):
+    resolutions, attempts = [], []
+
+    def resolve(*args, **kwargs):
+        resolutions.append(1)
+        return dns_answers("8.8.8.8", "1.1.1.1")
+
+    def connect(self, host, *args, **kwargs):
+        attempts.append(host)
+        raise httpcore.ConnectError("private-network-error")
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", connect)
+    with pytest.raises(NodeExecutionError) as failure:
+        get_json(AuthorizedConnection("https://api.example.com/status", "none"))
+    assert failure.value.code == FailureCode.HTTP_REQUEST_FAILED
+    assert resolutions == [1] and attempts == ["8.8.8.8", "1.1.1.1"]
+    assert "private-network-error" not in str(failure.value)
+
+
+def test_tcp_fallback_stops_at_shared_deadline(monkeypatch):
+    from app.modules.connections import http_executor
+
+    ticks = iter([0.0, 21.0])
+    attempts = []
+    monkeypatch.setattr(http_executor, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *args, **kwargs: dns_answers("8.8.8.8", "1.1.1.1")
+    )
+
+    def connect(self, host, *args, **kwargs):
+        attempts.append(host)
+        raise httpcore.ConnectTimeout()
+
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", connect)
+    with pytest.raises(httpcore.ConnectTimeout):
+        PublicNetworkBackend("api.example.com", 20).connect_tcp("api.example.com", 443)
+    assert attempts == ["8.8.8.8"]

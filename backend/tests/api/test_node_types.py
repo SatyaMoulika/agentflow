@@ -63,6 +63,7 @@ async def test_catalog_returns_contracts_and_handles_with_no_external_configurat
         "extract",
         "http",
         "agent",
+        "gmail_read",
     }
     for kind, item in items.items():
         ready = kind in {
@@ -78,6 +79,7 @@ async def test_catalog_returns_contracts_and_handles_with_no_external_configurat
             "extract",
             "http",
             "agent",
+            "gmail_read",
         }
         assert item["execution_ready"] is ready
         assert item["capabilities"] == (

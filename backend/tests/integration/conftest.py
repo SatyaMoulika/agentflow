@@ -13,6 +13,7 @@ from sqlalchemy.engine import Connection, make_url
 
 from app.core.config import Settings
 from app.infrastructure.database.session import Database
+from app.modules.agents.checkpoints import checkpoint_schema, setup_checkpoints
 
 
 @pytest.fixture
@@ -78,3 +79,15 @@ def repository_database(database: Database, migrated_connection: Connection) -> 
     database.engine = database.engine.execution_options(schema_translate_map={None: schema})
     database.session_factory.configure(bind=database.engine)
     return database
+
+
+@pytest.fixture
+def agent_database(repository_database: Database) -> Iterator[Database]:
+    schema = checkpoint_schema(repository_database)
+    assert schema.startswith("test_") and schema.endswith("_agents")
+    try:
+        setup_checkpoints(repository_database)
+        yield repository_database
+    finally:
+        with repository_database.engine.begin() as connection:
+            connection.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')

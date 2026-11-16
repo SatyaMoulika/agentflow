@@ -1,8 +1,8 @@
 # AgentFlow backend
 
-Current source migration head and configured development revision: **0010** (checked 10 November 2026 with no metadata drift). Phases 1–7 are implemented for their documented scope. Pure workflows support opt-in background dispatch/recovery/scheduled retries; Groq and HTTP graphs remain synchronous and excluded from automatic replay. **8A** now adds a bounded synchronous LangGraph calculator agent; next are authorized HTTP tools (8B) and persistent checkpoints (8C).
+Current source and local development migration head is **0012**, with checkpoint storage set up on 12 November 2026. Phases 1–7 are implemented for their documented scope. Pure workflows support opt-in background dispatch/recovery/scheduled retries; Groq and HTTP graphs remain synchronous and excluded from automatic replay. The bounded LangGraph Tool Agent supports calculator and authorized HTTP GET tools plus explicit continuation from saved post-tool checkpoints. Other databases require the current migration and [checkpoint setup](../docs/learning-notes/agent-checkpoints.md) before agent execution. Gmail read-only OAuth setup is available; see the [Gmail guide](../docs/learning-notes/gmail-connection.md) for current limits.
 
-Use the [implementation plan](../docs/backend-implementation-plan.md) as the current phase status and the [verification guide](../docs/verification.md) for actual check results and acceptance limits. Baseline: **1,301 backend tests** with isolated PostgreSQL/Redis and **135 frontend tests**, plus lint, formatting, type checks and build. Browser access was retried and remains unavailable.
+Use the [implementation plan](../docs/backend-implementation-plan.md) as the current phase status and the [verification guide](../docs/verification.md) for actual check results and acceptance limits. Verification on 16 November 2026 passed **1,390 backend tests** with isolated PostgreSQL/Redis and **146 frontend tests**, plus lint, formatting, type checks and build. The earlier live HTTP agent sample, command replay and revocation passed. Browser acceptance and live Gmail verification remain pending.
 
 Groq generation/version-bound edits, classification/extraction, JSON parsing, fixed public HTTPS GET connections, protected optional credentials and provider failure/usage history are implemented. See [provider hardening](../docs/learning-notes/provider-integration-hardening.md), [protected connections](../docs/learning-notes/secure-http-connections.md) and the [startup walkthrough](../docs/real-backend-walkthrough.md). Preserve the existing private `.env`.
 
@@ -66,6 +66,7 @@ From the repository root, with your development database URL configured:
 
 ```bash
 uv run --directory backend --locked alembic upgrade head
+uv run --directory backend --locked python scripts/setup_agent_checkpoints.py
 uv run --directory backend --locked alembic current
 uv run --directory backend --locked alembic check
 ```
@@ -406,7 +407,7 @@ Docker/socket integration checks needed permitted access outside the sandbox. Th
 
 ## Review and next increment
 
-**Phase 8A — bounded LangGraph calculator agent** is implemented; see [usage and limits](../docs/learning-notes/calculator-agent.md). HTTP agent tools and persistent checkpoints/recovery follow in 8B/8C. Browser acceptance remains pending because its access host is unavailable. See the [current plan](../docs/backend-implementation-plan.md) and [verification guide](../docs/verification.md).
+**Phase 8A–8C — bounded LangGraph tools and explicit continuation** is implemented. See the [calculator foundation](../docs/learning-notes/calculator-agent.md), [authorized HTTP agent sample](../docs/learning-notes/http-agent.md), and [checkpoint setup and limits](../docs/learning-notes/agent-checkpoints.md). The saved allowlist is owner-bound and rechecked between model/tool steps; credentials stay server-side and fetched JSON goes to Groq. Browser acceptance remains pending. See the [current plan](../docs/backend-implementation-plan.md) and [verification guide](../docs/verification.md).
 
 ## Execution commands — Phase 5D
 

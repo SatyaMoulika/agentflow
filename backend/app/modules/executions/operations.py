@@ -4,6 +4,7 @@ import json
 import math
 from typing import Any
 
+from app.core.tracing import traced
 from app.modules.executions.payloads import InvalidExecutionPayloadError, copy_payload
 from app.modules.executions.state import FailureCode
 from app.modules.workflows.compiler import CompiledBinding, CompiledNode
@@ -109,6 +110,7 @@ def _calculator(config: dict[str, Any]) -> dict[str, int | float]:
     return calculate(config["operation"], values)
 
 
+@traced("agentflow.calculator")
 def calculate(operation: str, values: list[int | float]) -> dict[str, int | float]:
     """Shared bounded arithmetic for deterministic nodes and the agent's only tool."""
     if operation not in {"add", "subtract", "multiply", "divide"} or not 2 <= len(values) <= 20:
@@ -134,6 +136,7 @@ def calculate(operation: str, values: list[int | float]) -> dict[str, int | floa
     return {"result": result}
 
 
+@traced("agentflow.pure_node")
 def execute_node(
     node: CompiledNode, input_data: dict[str, Any], *, resolved_config: dict[str, Any] | None = None
 ) -> dict[str, Any]:

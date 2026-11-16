@@ -1,0 +1,14 @@
+# Gmail integration implementation plan
+
+The goal is a real owned Gmail connection and a reviewable email workflow. Deliver in increments, keeping unavailable capabilities out of the active UI until each is wired and tested.
+
+1. **Provider boundary — implemented:** Google authorization-code flow with PKCE and read-only Gmail calls, bounded responses, static sanitized errors, and fixture-only unit tests.
+2. **Owned OAuth connection — implemented, live testing pending:** configure a fixed redirect URI and Google client privately, persist short-lived owner-bound state with an encrypted verifier, atomically consume it before token exchange, and encrypt refresh credentials. The UI can connect and locally disconnect; Google project configuration and live browser acceptance are still needed.
+3. **Manual read and classify — implemented, live testing pending:** list recent inbox IDs, select an ID through manual input, and read its plain-text body via an owner-bound Gmail node before existing workflow nodes. The UI discloses content sent to Groq and retained in run history. Fixture tests do not use real customer content.
+4. **New-message trigger:** implement durable mailbox synchronization, cursor advancement, duplicate-resistant event creation and worker delivery. Support authorization expiry, transient outages, cursor loss, reconnect, and safe catch-up. Gmail push requires Pub/Sub and watch renewal; a bounded polling-first version may simplify local development. Never hold a transaction over Google or broker calls.
+5. **Approval and actions:** durable authorized approval with expiration and restart-safe resume; add explicit Gmail draft and send actions. Record action intent and handle uncertain external outcomes through reconciliation. Do not claim exactly-once delivery or automatically repeat an ambiguous send.
+6. **End-to-end:** Google consent and scope verification as required for the chosen deployment, browser tests, isolated PostgreSQL/Redis tests, and synthetic opt-in live testing only with configured authorization. Explain retention, disclosure, revocation and deployment setup.
+
+Gmail connection setup and manual message reading are exposed; triggers, approvals and sending are not. Disconnect removes the local refresh credential; users can separately revoke Google's grant in their Google Account. OAuth code exchange is never retried automatically. A lost callback response requires starting a new authorization. The callback strips the authorization code from the browser URL; deployment access logs and reverse proxies must also avoid recording callback query strings.
+
+References: [Google OAuth web-server flow](https://developers.google.com/identity/protocols/oauth2/web-server), [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes), and [Gmail push notifications](https://developers.google.com/workspace/gmail/api/guides/push).

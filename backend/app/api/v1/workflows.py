@@ -15,6 +15,7 @@ from app.modules.auth.schemas import UserResponse
 from app.modules.connections.schemas import PlannerConnection
 from app.modules.connections.secrets import ConnectionUnavailableError
 from app.modules.connections.service import ConnectionService
+from app.modules.workflows.connection_bindings import node_connection_ids
 from app.modules.workflows.exceptions import WorkflowArchivedError, WorkflowVersionConflictError
 from app.modules.workflows.generation import (
     EditProposalRequest,
@@ -61,17 +62,15 @@ def _planner_catalog(
 ) -> list[PlannerConnection]:
     identities = list(selected)
     for node in (definition or {}).get("nodes", []):
-        if isinstance(node, dict) and node.get("type") == "http":
+        if isinstance(node, dict) and node.get("type") in {"http", "agent"}:
             try:
-                config = node.get("config")
-                value = config.get("connection_id") if isinstance(config, dict) else None
-                if not isinstance(value, str):
-                    raise ValueError()
-                identity = UUID(value)
+                bindings = node_connection_ids(node["type"], node.get("config"))
             except (ValueError, KeyError, TypeError):
                 raise HTTPException(status_code=422) from None
-            if identity not in identities:
-                identities.append(identity)
+            for value in bindings:
+                identity = UUID(value)
+                if identity not in identities:
+                    identities.append(identity)
     if len(identities) > 20:
         raise HTTPException(status_code=422)
     if not identities:
@@ -152,6 +151,19 @@ def generate_workflow_edit_proposal(
     if workflow.current_version_id != data.base_version_id or workflow.version is None:
         raise WorkflowVersionConflictError()
     definition = workflow.version.definition
+    nodes = definition.get("nodes", [])
+    if not isinstance(nodes, list):
+        raise HTTPException(status_code=422)
+    if any(isinstance(node, dict) and node.get("type") == "gmail_read" for node in nodes):
+        return error_response(
+            request,
+            422,
+            headers={"Cache-Control": "no-store"},
+            public_error=(
+                "GMAIL_PROPOSAL_UNAVAILABLE",
+                "AI edits for workflows with Gmail nodes are not available yet.",
+            ),
+        )
     if len(json.dumps(definition, ensure_ascii=False).encode("utf-8")) > 32000:
         return error_response(
             request,

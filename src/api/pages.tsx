@@ -11,6 +11,7 @@ import { starterDefinition } from './graph';
 import { useScope, useSession } from './session';
 import Canvas from './Canvas';
 import HttpConnections, { PlannerConnectionPicker } from './Connections';
+import GmailConnections from './GmailConnections';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import type {
   ExecutionEvent,
@@ -563,6 +564,10 @@ function eventDescription(event: ExecutionEvent, attempts: NodeAttempt[]) {
       return `Node ${typeof node === 'string' ? node : 'attempt'} ${typeof target === 'string' ? target : 'status changed'}`;
     case 'node.retry_scheduled':
       return `Retry scheduled for ${typeof node === 'string' ? node : 'node'}`;
+    case 'agent.checkpointed':
+      return `Agent ${typeof node === 'string' ? node : ''} paused after a saved tool result`;
+    case 'agent.resumed':
+      return `Agent ${typeof node === 'string' ? node : ''} continued from its checkpoint`;
     default:
       return event.event_type;
   }
@@ -714,6 +719,7 @@ export function RunView() {
   if (run.isPending) return <Pending />;
   if (run.isError) return <Failure error={run.error} retry={() => void run.refetch()} />;
   const data = run.data;
+  const pausedAgent = data.node_runs.find((row) => row.checkpoint?.status === 'paused');
   const hasExternalCall = data.version.definition.nodes.some((node) =>
     ['groq', 'classify', 'extract', 'http', 'agent'].includes(node.type),
   );
@@ -744,6 +750,22 @@ export function RunView() {
       void cache.invalidateQueries({ queryKey: [...scope, 'runs'] });
     } catch (error) {
       setCommandError(error);
+    } finally {
+      setCommandBusy('');
+    }
+  }
+  async function resumeAgent(row: NodeAttempt) {
+    if (!row.checkpoint?.checkpoint_id) return;
+    setCommandBusy('resume');
+    setCommandError(null);
+    try {
+      const result = await api.resumeAgent(executionId, row.id, row.checkpoint.checkpoint_id);
+      cache.setQueryData([...scope, 'run', executionId], result);
+      void cache.invalidateQueries({ queryKey: [...scope, 'runs'] });
+    } catch (error) {
+      setCommandError(error);
+      // A lost response may hide a committed continuation. Refresh before another command.
+      await run.refetch();
     } finally {
       setCommandBusy('');
     }
@@ -796,9 +818,11 @@ export function RunView() {
         <p className="api-notice" aria-live="polite">
           {data.next_retry_at
             ? `Waiting to retry ${data.retry_node_id} (attempt ${data.next_retry_attempt}) at ${date(data.next_retry_at)}.`
-            : data.status === 'queued'
-              ? 'Waiting for execution to start.'
-              : 'Executing the saved workflow.'}{' '}
+            : pausedAgent
+              ? `Paused after a saved tool result in ${pausedAgent.node_id}. Continue from its checkpoint below.`
+              : data.status === 'queued'
+                ? 'Waiting for execution to start.'
+                : 'Executing the saved workflow.'}{' '}
           This page updates automatically while the execution is active.
         </p>
       )}
@@ -889,14 +913,54 @@ export function RunView() {
             <div className="api-two-columns">
               <div>
                 <ProviderDetails metadata={row.provider} />
+                {row.checkpoint && (
+                  <section aria-label="Agent checkpoint">
+                    <h3>Saved agent state</h3>
+                    <p>
+                      {row.checkpoint.status === 'paused'
+                        ? 'Paused after a saved tool result. Continuing makes the next model request and follows the remaining workflow.'
+                        : `Checkpoint status: ${row.checkpoint.status}.`}
+                    </p>
+                    <p className="muted">
+                      Thread <code>{row.checkpoint.thread_id}</code> · Continuations:{' '}
+                      {row.checkpoint.resume_count}
+                    </p>
+                    {row.checkpoint.status === 'paused' && data.status === 'running' && (
+                      <Button
+                        disabled={!!commandBusy}
+                        loading={commandBusy === 'resume'}
+                        onClick={() => void resumeAgent(row)}
+                      >
+                        Continue agent
+                      </Button>
+                    )}
+                    {row.checkpoint.status === 'running' && (
+                      <p className="muted">
+                        If execution was interrupted, its external call outcome may be unknown.
+                        Automatic continuation is unavailable; inspect history before cancelling or
+                        starting another run.
+                      </p>
+                    )}
+                  </section>
+                )}
                 {row.agent && (
                   <section aria-label="Agent execution details">
-                    <h3>Calculator agent</h3>
+                    <h3>Tool agent</h3>
                     <p>
-                      Completed calculator calls: {row.agent.tool_rounds} · Groq requests:{' '}
+                      Completed tool calls: {row.agent.tool_rounds} · HTTP tool attempts:{' '}
+                      {row.agent.http_tool_attempts ?? 0} · Groq requests:{' '}
                       {row.agent.provider_calls.length}
                     </p>
                     {row.agent.failure_reason && <p>Agent stopped: {row.agent.failure_reason}</p>}
+                    {row.agent.http_calls?.map((call, index) => (
+                      <p key={index}>
+                        HTTP connection <code>{call.connection_id}</code> ·{' '}
+                        {call.error_code ??
+                          (call.status_code
+                            ? `Status ${call.status_code}`
+                            : 'Outcome not recorded')}
+                      </p>
+                    ))}
                     {row.agent.provider_calls.map((metadata, index) => (
                       <ProviderDetails key={index} metadata={metadata} />
                     ))}
@@ -962,7 +1026,8 @@ export function Integrations() {
   }
   return (
     <div className="api-page">
-      <PageHeader title="Integrations" description="Manage HTTP connections and test Groq." />
+      <PageHeader title="Integrations" description="Manage connections and test Groq." />
+      <GmailConnections />
       <HttpConnections />
       <form className="card api-panel api-form" onSubmit={submit}>
         <h2>Groq</h2>

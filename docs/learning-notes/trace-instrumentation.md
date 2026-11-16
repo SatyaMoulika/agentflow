@@ -1,0 +1,9 @@
+# Phase 9A: tracing instrumentation foundation
+
+AgentFlow now marks inbound HTTP requests, synchronous workflow node execution, pure-node execution, Groq requests, calculator calls, authorized HTTP calls and agent tool steps with OpenTelemetry API spans. Parent context follows normal in-process calls, including the FastAPI threadpool. The default OpenTelemetry provider is a no-op: this increment configures no SDK, collector, exporter, network destination or trace viewer.
+
+The instrumentation emits only fixed, code-owned span names. It passes no workflow inputs or outputs, prompts, responses, node identifiers, endpoint URLs, headers, credentials or exception text to the tracing API. An exception escaping an instrumented function sets an error status without recording the exception; errors handled inside that function are not necessarily represented by an error status. Request error responses may be handled by the HTTP middleware, so their span status alone is not an HTTP outcome. Normal persisted run events and HTTP logs remain the source of truth for outcomes.
+
+Instrumentation failures while creating, ending or setting the status of a span do not change application results. No request body is buffered by this instrumentation. LangSmith's implicit export remains disabled for agent execution.
+
+This is the first part of 9A, not complete distributed tracing. Dispatch and worker processes do not yet share a trace context; retries, queued work and recovery cannot yet be correlated with their originating HTTP trace. No Phoenix integration, redaction-aware exporter configuration, sampling policy or browser trace view is provided. An externally installed/configured OpenTelemetry provider can consume these spans; its own resource attributes, processors and exporter must be reviewed separately for privacy.

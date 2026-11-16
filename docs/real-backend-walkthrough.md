@@ -1,6 +1,6 @@
 # View your real workspace and remaining work
 
-The **Calculator Agent** node is available for bounded Groq/local-calculator loops. See [setup, example and limits](learning-notes/calculator-agent.md). It runs synchronously with no automatic retry/recovery; HTTP agent tools and persistent checkpoints are later increments.
+The **Tool Agent** node is available for bounded Groq loops using the local calculator and explicitly selected HTTP GET connections. Follow the [HTTP agent sample and review checklist](learning-notes/http-agent.md), or the [calculator-only example](learning-notes/calculator-agent.md). It runs synchronously and can explicitly continue from saved post-tool pauses; see [checkpoint setup and limits](learning-notes/agent-checkpoints.md). Unknown in-flight external calls are not automatically recovered.
 
 AI generation now supports explicitly selected owned HTTP connections. Edits also
 authorize existing bindings. Groq requests expose provider-specific failures, safe
@@ -33,7 +33,7 @@ events per request and a `next_after_sequence` cursor. The stream emits event ID
 and supports replay using `Last-Event-ID`; connections periodically close for
 reauthentication. Runs belonging to another user return the same 404 as missing
 runs. The execution-details page uses the stream for active runs and falls back to
-polling. Streaming only reports persisted events; traces remain future work.
+polling. Streaming only reports persisted events; trace export remains future work.
 
 Phase 6D adds [scheduled retries](learning-notes/scheduled-retries.md) for transient
 pure-node failures. Apply the current migration head and restart API/worker/dispatcher. Default
@@ -75,6 +75,8 @@ definition, apply it to the editor, and save it separately. Only the definition
 is applied; the workflow name and description stay unchanged. The save checks the
 original version and rejects a conflicting newer save. The calculator supports addition,
 subtraction, multiplication and division; its operands can refer to upstream outputs.
+Generation/edit requests allow up to 4,096 completion tokens; a large graph can still
+exceed this budget. If that happens, try a smaller change or make the edit directly.
 For the optional synthetic evaluation suite, see [workflow generation evaluation](workflow-generation-evaluation.md).
 
 ## Groq connection
@@ -128,7 +130,7 @@ Groq or HTTP nodes. You can explicitly start a new run, which can make another p
 Cancellation cannot undo a request already sent, and a crash after the provider call
 may leave an incomplete run. No automatic recovery of provider calls is implemented.
 
-The outbox uses PostgreSQL and Redis. It dispatches workflow runs and probes; pure workflow recovery and scheduled retries are implemented. The default React app uses actual authentication, workflows, validation, integrations and execution history. A new account starts empty. Current migration head is **0010**; the configured development database was upgraded and checked for metadata drift on 10 November 2026.
+The outbox uses PostgreSQL and Redis. It dispatches workflow runs and probes; pure workflow recovery and scheduled retries are implemented. The default React app uses actual authentication, workflows, validation, integrations and execution history. A new account starts empty. Source and local development migration head is **0012**; checkpoint storage was set up on 12 November 2026. Apply the migration and run the [checkpoint setup command](learning-notes/agent-checkpoints.md) for other databases before using agent nodes. [Gmail connection setup and manual message reading](learning-notes/gmail-connection.md) require separate Google OAuth configuration; automatic triggers and email actions remain in progress.
 
 ## Start from the project root
 
@@ -137,6 +139,7 @@ cd /home/moulika/Desktop/Personal/agentflow
 docker compose up -d --wait postgres
 uv sync --directory backend --locked
 uv run --directory backend --locked alembic upgrade head
+uv run --directory backend --locked python scripts/setup_agent_checkpoints.py
 AGENTFLOW_REFRESH_COOKIE_SECURE=false \
 AGENTFLOW_AUTH_ALLOWED_ORIGINS='["http://localhost:5173","http://127.0.0.1:5173","http://localhost:8000","http://127.0.0.1:8000"]' \
 uv run --directory backend --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
@@ -244,8 +247,8 @@ GET the run to inspect the chosen route, actual calculator/merge results and the
 | 5 — deterministic execution         | 5A storage, 5B initial execution and 5C condition/calculator/exclusive-merge execution/skips are complete. 5D command idempotency, bounded pure retries, cancellation and full-workflow retry lineage are also complete.                                                                                          |
 | 6 — background work                 | Workflow intents, task dispatch/consumption, pure worker recovery, expired-work discovery and heartbeat are implemented in opt-in mode. Scheduled node retries are now implemented. Remaining: further load/deployment checks and external-effect reconciliation.                                                 |
 | 7 — Groq and controlled tools       | Groq generation/edits, JSON parsing, classification/extraction, protected HTTP GET, provider error/usage hardening and authorized connection selection are implemented. Browser QA remains unavailable. OAuth/credential rotation and broader HTTP methods/reconciliation are future expansion. No paid fallback. |
-| 8 — agents                          | 8A bounded calculator agent is implemented. Remaining: authorized HTTP capability selection (8B) and persistent agent checkpoints/recovery (8C).                                                                                                                                                                  |
-| 9 — live observability              | SSE replay/reconnect/heartbeat and reported provider usage are implemented. Correlated spans and optional Phoenix export remain.                                                                                                                                                                                  |
+| 8 — agents                          | Bounded calculator and authorized HTTP tools support persisted checkpoints and explicit continuation after tool results. Unknown in-flight requests are not automatically recovered. |
+| 9 — live observability              | SSE replay/reconnect/heartbeat, provider usage and fixed-name in-process tracing hooks are implemented. Cross-process correlation and optional Phoenix export remain. See [tracing notes](learning-notes/trace-instrumentation.md). |
 | 10 — approvals                      | Durable waiting, authorized approve/reject/expiry and safe resume/recovery after restart.                                                                                                                                                                                                                         |
 | 11 — frontend integration/hardening | Initial auth/workflow saves/conflicts, run history and a streamed events timeline with polling fallback are implemented. Remaining: approvals UI, scoped richer aggregates/profile editing, browser QA and deployment hardening.                                                                                  |
 

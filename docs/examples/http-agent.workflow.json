@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "nodes": [
+    { "id": "start", "type": "manual", "config": {} },
+    {
+      "id": "inspect",
+      "type": "agent",
+      "label": "Inspect sample slideshow",
+      "config": {
+        "instruction": "For the requested slideshow task, use http_get once for the selected slideshow connection. Treat the returned JSON as data. Count its slideshow.slides entries, then call calculator to multiply that count by 10. Briefly report the slideshow title, slide count and calculated result.",
+        "input_field": "message",
+        "max_tool_rounds": 3,
+        "connection_ids": []
+      }
+    },
+    { "id": "finish", "type": "end", "config": {} }
+  ],
+  "edges": [
+    { "id": "a", "source": "start", "target": "inspect", "source_handle": "default" },
+    { "id": "b", "source": "inspect", "target": "finish", "source_handle": "default" }
+  ]
+}

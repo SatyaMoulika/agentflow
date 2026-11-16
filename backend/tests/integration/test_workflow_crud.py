@@ -605,6 +605,7 @@ async def test_real_catalog_auth_uses_current_active_user_and_does_not_execute(
     assert first.json() == second.json()
     assert {item["type"] for item in first.json()["items"] if item["execution_ready"]} == {
         "agent",
+        "gmail_read",
         "http",
         "groq",
         "json_parser",

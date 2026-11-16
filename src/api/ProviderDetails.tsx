@@ -49,8 +49,8 @@ export function ConnectionReview({
         ))}
       </ul>
       <p className="muted">
-        Check each HTTP node's connection ID against these endpoints. Generating a proposal does not
-        call them.
+        Check HTTP node and agent connection IDs against these endpoints. Agent HTTP results are
+        sent to Groq when you run the workflow. Generating a proposal does not call endpoints.
       </p>
     </section>
   );

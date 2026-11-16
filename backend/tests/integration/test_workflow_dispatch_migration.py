@@ -115,5 +115,5 @@ def test_dispatch_target_pending_uniqueness_and_retained_history_guards(
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0006")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
     assert connection.scalar(text("SELECT count(*) FROM workflow_dispatches")) == 1

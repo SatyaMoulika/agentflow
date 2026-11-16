@@ -219,6 +219,7 @@ def test_reference_grammar_rejects_expression_or_unbounded_paths(path: str) -> N
 def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> None:
     first = node_type_catalog()
     assert [item.type for item in first.items] == [
+        "gmail_read",
         "agent",
         "http",
         "manual",
@@ -246,6 +247,7 @@ def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> 
             "extract",
             "http",
             "agent",
+            "gmail_read",
         }
         assert item.execution_ready is ready
         assert item.capabilities == (
@@ -273,7 +275,7 @@ def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> 
     first.items[0].output_handles.append("private-handle")
     first.items.clear()
     second = node_type_catalog()
-    assert len(second.items) == 12
+    assert len(second.items) == 13
     assert "private_mutation" not in second.items[0].config_schema
     assert second.items[0].output_handles == ["default"]
 

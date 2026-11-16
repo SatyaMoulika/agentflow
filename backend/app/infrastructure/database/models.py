@@ -1,5 +1,6 @@
 """Explicit model registry for Alembic and ORM users; no schema/network side effects."""
 
+from app.modules.agents.models import AgentInvocation
 from app.modules.auth.models import User
 from app.modules.auth.refresh_models import RefreshSession, RefreshToken
 from app.modules.claims.models import RunClaim
@@ -7,11 +8,15 @@ from app.modules.connections.models import Connection
 from app.modules.executions.dispatch_models import WorkflowDispatch
 from app.modules.executions.models import ExecutionEvent, NodeRun, RunCommand, WorkflowRun
 from app.modules.executions.retry_models import NodeRetry
+from app.modules.gmail.models import GmailAuthorization, GmailConnection
 from app.modules.outbox.models import OutboxMessage
 from app.modules.workflows.models import Workflow, WorkflowStatus, WorkflowVersion
 
 __all__ = [
+    "AgentInvocation",
     "Connection",
+    "GmailAuthorization",
+    "GmailConnection",
     "User",
     "WorkflowRun",
     "WorkflowDispatch",

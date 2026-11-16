@@ -1,5 +1,31 @@
 # Development log
 
+## 13 November 2026 — Gmail provider foundation
+
+Started the [Gmail integration sequence](gmail-implementation-plan.md) with code-owned Google OAuth authorization, PKCE and token-exchange/refresh primitives, fixed Gmail list/read endpoints, bounded sanitized provider errors and bounded plain-text extraction. Credentials are represented with SecretStr and provider calls do not follow redirects or retry. This is not exposed as a product feature: authorization state persistence, connection ownership, routes, editor nodes, triggers, approvals and Gmail actions are still outstanding. No migration or application configuration was changed and no real account or Google API was contacted. The standard backend check passed **944 tests** with **438 opt-in integration cases skipped**, plus Ruff and Pyright.
+
+## 12 November 2026 — Workflow proposal output limit
+
+A user received `PROVIDER_OUTPUT_LIMIT` while requesting an edit to a multi-node workflow. Workflow generation and editing require the provider to return the complete graph; their bounded completion allowance is now 4,096 tokens instead of the general JSON allowance of 2,048. Other provider calls retain their previous bounds. The planner also explains explicit mappings after conditions and numeric versus substring comparisons. Truncated responses remain errors and provider calls are not automatically retried.
+
+The standard backend checker passed **932 tests** with **438 opt-in integrations skipped**, Ruff and Pyright; **49 focused PostgreSQL run and connection integration tests** passed. No real provider call, browser test or business-data replay was performed. A larger graph or model reasoning can still exceed the allowance or account quota.
+
+## 12 November 2026 — Development schema update
+
+After a user reported an unexpected error while running a workflow, a read-only check showed that development was still on migration 0010. Current run-detail code queries the invocation table introduced by 0011, including for non-agent workflows; the mismatch can cause a failure after execution. The request log was not available, so the exact exception was not confirmed. Applied the tested additive 0011 migration and initialized the separate checkpoint schema. `alembic current` reports 0011 head and `alembic check` reports no drift. An existing run was read successfully through the application service without displaying its data. No workflow was rerun and no development fixtures or destructive checks were used.
+
+## 11 November 2026 — Phase 9A tracing foundation
+
+Added fixed-name OpenTelemetry API instrumentation at HTTP, synchronous and pure node, model and tool boundaries. The default provider is a no-op; no SDK, exporter, collector or cross-process propagation was added. Span creation/cleanup failures do not interrupt execution, and no business payload, endpoint, identifier or exception text is added to spans. See [tracing notes](learning-notes/trace-instrumentation.md).
+
+The standard backend checker passed **930 tests** with **438 opt-in integrations skipped**, Ruff and Pyright; a focused isolated PostgreSQL run passed **49 agent and worker tests**. New tests verify threadpool parenting, privacy and fail-open behavior using a recording test double. No new browser, provider, collector or Redis check was run. The existing PostgreSQL test service was preserved.
+
+## 11 November 2026 — Phase 8C verification
+
+The in-progress checkpoint implementation adds PostgreSQL-backed LangGraph state, retained invocation/thread correlation, explicit post-tool pauses, owner-checked continuation and execution-detail controls. Migration 0011 owns invocation history; a separate setup command installs the saver schema. Continuation never automatically replays an unknown in-flight external call. See [checkpoint setup and limits](learning-notes/agent-checkpoints.md).
+
+Updated the OpenAPI and migration tests for the new endpoint and revision. The full guarded PostgreSQL/Redis backend checker passed **1,364 tests**, Ruff and Pyright; frontend checks passed **141 tests**, lint and build. A focused agent integration run passed **26 tests**. The existing test PostgreSQL was retained and the Redis test service started for this task was stopped. Development was not migrated; no new live-provider or browser acceptance run was performed.
+
 ## 30 October 2026 — Backend Phase 0 planning
 
 **Scope:** inspect the supplied backend architecture brief, current frontend contracts and earlier unintegrated drafts; propose the incremental implementation and verification sequence. Planning/documentation only.
@@ -670,3 +696,25 @@ Private `.env`, development database and applied migration revisions were preser
 **Limits:** browser discovery returned an unavailable access host; browser/visual acceptance remains pending. No live Groq call was made for this increment. A model answer can be inaccurate; inspect actual calculator results. Failed attempts retain counts/stop/usage metadata rather than durable intermediate tool checkpoints. No automatic crash resume, HTTP agent tool or external-effect reconciliation is claimed.
 
 **Next:** 8B authorized HTTP agent tool, then 8C persistent checkpoint correlation/recovery. See the [calculator-agent guide](learning-notes/calculator-agent.md) for a runnable graph, exact bounds and exercise.
+
+## 10 November 2026 — Groq connection timeout correction
+
+The live Version 2 calculator run and a simple Integrations completion both timed out at the configured 45-second boundary. Public endpoint probes showed IPv4 responding in about 0.3 seconds while the IPv6 route stalled; HTTPX with a five-second connect timeout reached the same endpoint after fallback. The shared provider adapter previously allowed a connection attempt to consume the entire response deadline.
+
+Capped connect timeouts at five seconds or the smaller remaining request budget, preserving the configured response timeouts, TLS validation, direct transport, no redirects and no automatic provider retry. Added regression coverage for a stalled first address exhausting the old overall deadline, short configured budgets and the agent's smaller remaining budget. No private environment setting, model selection, workflow data, schema or frontend was changed.
+
+Verification: standard checker **888 passed/416 integration cases skipped**, Ruff lint/format (205 files) and Pyright clean; targeted provider/agent tests **79 passed**. One synthetic live Groq completion and a live calculator-agent invocation passed. The agent made one actual calculator call and two provider requests in 11.17 seconds. No database writes or business data were used. The earlier 1,301-test PostgreSQL/Redis suite remains the Phase 8A baseline; it was not repeated for this transport-only patch. Restart the API before trying a fresh editor run if reload is not enabled.
+
+## 10 November 2026 — Phase 8B authorized HTTP agent tools
+
+**Implemented:** the existing `agent` type is now displayed as Tool Agent. A saved strict `connection_ids` allowlist grants up to ten owned active fixed-endpoint HTTP GET connections; empty/omitted configuration retains the calculator-only agent. `agents/http_tools.py` binds connection access to the authenticated owner. The typed LangGraph loop exposes only a code-owned selected-ID schema, rejects arbitrary URL/headers/body, rechecks grants before each model turn and immediately before fetching, and refuses repeated endpoint fetches even through connection aliases. Calculator/HTTP share the existing finite round/deadline budget. Agent responses and conversation growth are bounded. No dependency, schema or migration was added; head stays 0010.
+
+**Request and history flow:** metadata lookup does not decrypt credentials. Authorization closes storage before decryption/network; no transaction spans external calls. Selected endpoint metadata and fetched JSON go to Groq with explicit UI disclosure; credentials stay server-side. Successful output preserves actual business JSON and calculator entries, adding HTTP tool results. Bounded attempt metadata records HTTP tool attempts, selected connection status/error, static failure reason and each provider request; it commits atomically with terminal attempt state. Old stored events decode with defaults, without rewriting history. Agent-aware proposal generation/editing accepts only explicitly approved connection IDs and never executes tools.
+
+**Active frontend and sample:** the editor has an explicit multi-connection agent picker, including removal of missing/revoked IDs. Integrations and proposal review explain data sharing; execution details show actual HTTP/tool/provider summaries. The [HTTP agent guide](learning-notes/http-agent.md) supplies [workflow JSON](examples/http-agent.workflow.json), [input](examples/http-agent.input.json), expected tool history, revocation and calculator compatibility checks.
+
+**Live finding:** the first live sample stopped on an HTTP connect timeout because DNS listed unusable IPv6 routes first. The controlled executor now validates every DNS answer, prefers IPv4 and permits TCP address fallback within the operation deadline before sending a request. TLS/HTTP is never retried; public destination pinning and mixed/private-address rejection remain. Four regression tests cover preference, fallback before one GET, exhausted addresses and the shared deadline. The earlier five-second Groq connect-timeout correction is included in the final full verification.
+
+**Verification:** **1,351 backend tests** passed with isolated PostgreSQL/Redis, Ruff lint/format (208 files) and Pyright; **137 frontend tests**, lint, TypeScript and production build passed. The live API sample then succeeded with one actual HTTP request, three Groq requests, two fetched slides and actual calculator result **20** in **18.81 seconds**. Command replay retained identical history with no extra calls; revocation blocked a fresh run before HTTP/Groq. Synthetic fixtures used only a random guarded test schema, removed afterward. Only the task-started Redis test service was removed; pre-existing PostgreSQL and development data were preserved. Private-value scanning found no newly introduced configured secrets; the private `.env` remains ignored and unmodified.
+
+**Limits and next:** browser discovery was retried and its access host remains unavailable; UI click-through/layout acceptance is pending. Model tool selection/content is not guaranteed by one live pass. HTTP/agent graphs stay synchronous with no automatic retry, background recovery or durable intermediate checkpoints. A cancellation/crash can leave an issued request's outcome unknown. Review the sample before **8C**, persistent checkpoint correlation/recovery; it must preserve external-call reconciliation boundaries.

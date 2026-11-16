@@ -75,6 +75,12 @@ async def test_openapi_documents_health_and_only_the_implemented_endpoints() -> 
         "/api/v1/runs",
         "/api/v1/runs/{run_id}/cancel",
         "/api/v1/runs/{run_id}/retry",
+        "/api/v1/runs/{run_id}/agent-resume",
+        "/api/v1/gmail/authorize",
+        "/api/v1/gmail/complete",
+        "/api/v1/gmail/connections",
+        "/api/v1/gmail/connections/{connection_id}",
+        "/api/v1/gmail/connections/{connection_id}/messages",
     }
     operation = schema["paths"]["/api/v1/health"]["get"]
     assert operation["operationId"] == "get_health"

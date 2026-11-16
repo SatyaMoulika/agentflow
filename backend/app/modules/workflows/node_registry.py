@@ -13,6 +13,7 @@ from app.modules.workflows.node_configs import (
     ConditionConfig,
     EndConfig,
     ExtractConfig,
+    GmailReadConfig,
     GroqConfig,
     HttpConfig,
     JsonParserConfig,
@@ -23,6 +24,7 @@ from app.modules.workflows.node_configs import (
 
 NodeTypeId = Literal[
     "agent",
+    "gmail_read",
     "http",
     "manual",
     "transform",
@@ -39,6 +41,7 @@ NodeCategory = Literal["trigger", "logic", "tool"]
 EXECUTION_READY_TYPES: frozenset[NodeTypeId] = frozenset(
     {
         "agent",
+        "gmail_read",
         "http",
         "manual",
         "transform",
@@ -96,10 +99,18 @@ class _Registration:
 
 _REGISTRATIONS = (
     _Registration(
-        "agent",
-        "Calculator Agent",
+        "gmail_read",
+        "Read Gmail message",
         "tool",
-        "Bounded Groq calculator tool loop. Synchronous; no automatic retry or recovery.",
+        "Read the plain-text body of a selected message from an owned Gmail connection.",
+        ("default",),
+        TypeAdapter(GmailReadConfig),
+    ),
+    _Registration(
+        "agent",
+        "Tool Agent",
+        "tool",
+        "Bounded calculator and selected HTTP GET tools. No automatic retry or recovery.",
         ("default",),
         TypeAdapter(AgentConfig),
     ),

@@ -349,11 +349,11 @@ def test_additive_connection_migration_preserves_users_and_refuses_history_downg
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0008")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
     assert connection.scalar(text("SELECT count(*) FROM connections")) == 1
 
 
-def http_proposal(identity: str) -> dict:
+def http_proposal(identity: str, node_type: str = "http") -> dict:
     return {
         "status": "ready",
         "message": "Review the authorized endpoint.",
@@ -364,7 +364,19 @@ def http_proposal(identity: str) -> dict:
             "schema_version": "1.0",
             "nodes": [
                 {"id": "start", "type": "manual", "config": {}},
-                {"id": "read", "type": "http", "config": {"connection_id": identity}},
+                {
+                    "id": "read",
+                    "type": node_type,
+                    "config": (
+                        {"connection_id": identity}
+                        if node_type == "http"
+                        else {
+                            "instruction": "Read the selected endpoint.",
+                            "input_field": "message",
+                            "connection_ids": [identity],
+                        }
+                    ),
+                },
                 {"id": "finish", "type": "end", "config": {}},
             ],
             "edges": [
@@ -375,11 +387,13 @@ def http_proposal(identity: str) -> dict:
     }
 
 
+@pytest.mark.parametrize("node_type", ["http", "agent"])
 async def test_selected_owned_catalog_is_read_only_and_does_not_decrypt_or_call_endpoints(
     client: AsyncClient,
     repository_database: Database,
     owners: tuple[UUID, UUID],
     monkeypatch,
+    node_type,
 ) -> None:
     from app.infrastructure.database.models import Workflow
 
@@ -390,13 +404,16 @@ async def test_selected_owned_catalog_is_read_only_and_does_not_decrypt_or_call_
     baseline = cast(QueuePool, repository_database.engine.pool).checkedout()
     calls = []
 
-    def complete(settings, prompt, *, json_mode=False):
+    def complete(settings, prompt, *, json_mode=False, workflow_proposal=False):
         assert cast(QueuePool, repository_database.engine.pool).checkedout() == baseline
         assert selected["id"] in prompt and selected["endpoint_url"] in prompt
         assert hidden["id"] not in prompt and hidden["endpoint_url"] not in prompt
         assert PRIVATE not in prompt
         calls.append(1)
-        return {"model": "test-model", "content": json.dumps(http_proposal(selected["id"]))}
+        return {
+            "model": "test-model",
+            "content": json.dumps(http_proposal(selected["id"], node_type)),
+        }
 
     def forbidden(*args, **kwargs):
         pytest.fail("Planning must not decrypt credentials or call an endpoint")
@@ -446,32 +463,40 @@ async def test_invalid_planner_selection_is_rejected_before_provider_call(
     assert response.status_code == (422 if state == "duplicate" else 404)
 
 
+@pytest.mark.parametrize("node_type", ["http", "agent"])
 async def test_model_cannot_use_an_owned_but_unselected_connection(
-    client: AsyncClient, monkeypatch
+    client: AsyncClient,
+    monkeypatch,
+    node_type,
 ) -> None:
     selected = await create(client)
     monkeypatch.setattr(
         "app.modules.workflows.generation.complete",
         lambda *a, **kw: {
             "model": "test-model",
-            "content": json.dumps(http_proposal(selected["id"])),
+            "content": json.dumps(http_proposal(selected["id"], node_type)),
         },
     )
     response = await client.post("/api/v1/workflows/generate", json={"prompt": "Read status"})
     assert response.status_code == 502 and response.json()["error"]["code"] == "GENERATION_INVALID"
 
 
+@pytest.mark.parametrize("node_type", ["http", "agent"])
 async def test_revocation_during_generation_rejects_the_result(
     client: AsyncClient,
     repository_database: Database,
     owners: tuple[UUID, UUID],
     monkeypatch,
+    node_type,
 ) -> None:
     selected = await create(client)
 
     def complete(settings, *args, **kwargs):
         ConnectionService(repository_database, settings).revoke(owners[0], UUID(selected["id"]))
-        return {"model": "test-model", "content": json.dumps(http_proposal(selected["id"]))}
+        return {
+            "model": "test-model",
+            "content": json.dumps(http_proposal(selected["id"], node_type)),
+        }
 
     monkeypatch.setattr("app.modules.workflows.generation.complete", complete)
     response = await client.post(
@@ -514,6 +539,42 @@ async def test_edit_rechecks_saved_and_new_bindings_without_saving_a_version(
     }
     current = await client.get(f"/api/v1/workflows/{workflow}")
     assert current.json()["current_version_id"] == str(version)
+
+
+async def test_agent_edit_authorizes_saved_bindings_and_rejects_revocation_before_provider(
+    client, repository_database, owners, monkeypatch
+):
+    selected = await create(client)
+    definition = http_proposal(selected["id"], "agent")["definition"]
+    with repository_database.unit_of_work() as session:
+        repository = WorkflowRepository(session)
+        workflow = repository.add(owner_id=owners[0], name="Agent binding")
+        version = repository.append_version(
+            workflow_id=workflow.id, owner_id=owners[0], expected_version=0, definition=definition
+        )
+        workflow_id, version_id = workflow.id, version.id
+    calls = []
+
+    def complete(settings, prompt, **kwargs):
+        calls.append(1)
+        assert selected["id"] in prompt
+        return {
+            "model": "test-model",
+            "content": json.dumps(http_proposal(selected["id"], "agent")),
+        }
+
+    monkeypatch.setattr("app.modules.workflows.generation.complete", complete)
+    url = f"/api/v1/workflows/{workflow_id}/edit-proposal"
+    body = {"base_version_id": str(version_id), "prompt": "Keep the authorized agent tool"}
+    response = await client.post(url, json=body)
+    assert response.status_code == 200 and calls == [1]
+    assert response.json()["connections"][0]["id"] == selected["id"]
+    assert (await client.get(f"/api/v1/workflows/{workflow_id}")).json()[
+        "current_version_id"
+    ] == str(version_id)
+    await client.delete(f"/api/v1/connections/{selected['id']}")
+    denied = await client.post(url, json=body)
+    assert denied.status_code == 404 and calls == [1]
 
 
 @pytest.mark.parametrize("failure", [False, True])

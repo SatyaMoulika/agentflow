@@ -36,8 +36,11 @@ def test_upgrade_downgrade_reupgrade_and_metadata_drift(
         "workflow_dispatches",
         "node_retries",
         "connections",
+        "agent_invocations",
+        "gmail_authorizations",
+        "gmail_connections",
     }
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
     connection.commit()
     command.check(config)
     connection.commit()
@@ -93,6 +96,9 @@ def test_upgrade_downgrade_reupgrade_and_metadata_drift(
         "workflow_dispatches",
         "node_retries",
         "connections",
+        "agent_invocations",
+        "gmail_authorizations",
+        "gmail_connections",
     }
 
 

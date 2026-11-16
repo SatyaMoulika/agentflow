@@ -26,6 +26,7 @@ import {
   Unavailable,
 } from './api/pages';
 import Editor from './api/Editor';
+import { GmailCallback } from './api/GmailConnections';
 import './api/workspace.css';
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,6 +110,7 @@ const router = createBrowserRouter(
           <Route path="executions/:executionId" element={<RunView />} />
           <Route path="settings" element={<Account />} />
           <Route path="integrations" element={<Integrations />} />
+          <Route path="integrations/gmail/callback" element={<GmailCallback />} />
           <Route path="approvals/*" element={<Unavailable kind="Approvals" />} />
           <Route
             path="*"

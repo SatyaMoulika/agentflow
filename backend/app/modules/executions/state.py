@@ -45,6 +45,8 @@ RETRYABLE_FAILURE_CODES = frozenset({FailureCode.INTERNAL_FAILURE, FailureCode.D
 
 
 class EventType(StrEnum):
+    AGENT_CHECKPOINTED = "agent.checkpointed"
+    AGENT_RESUMED = "agent.resumed"
     RUN_CREATED = "run.created"
     RUN_STATUS_CHANGED = "run.status_changed"
     NODE_CREATED = "node.created"

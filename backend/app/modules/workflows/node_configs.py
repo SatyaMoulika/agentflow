@@ -1,6 +1,7 @@
 """Strict configuration contracts only; no evaluation, reference resolution or execution."""
 
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -64,10 +65,37 @@ class HttpConfig(NodeConfig):
     connection_id: str = Field(pattern=r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
 
+class GmailReadConfig(NodeConfig):
+    """Read one selected message from an owned Gmail connection."""
+
+    connection_id: str = Field(pattern=r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+    message_id_field: str = Field(min_length=1, max_length=200)
+
+    @field_validator("message_id_field")
+    @classmethod
+    def field_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Value must not be blank")
+        return value
+
+
 class AgentConfig(GroqConfig):
-    """Synchronous Groq agent with only the code-owned calculator capability."""
+    """Synchronous bounded tools; HTTP capabilities require explicit saved bindings."""
 
     max_tool_rounds: int = Field(default=3, ge=1, le=5)
+    connection_ids: list[str] = Field(default_factory=list, max_length=10)
+    pause_after_tools: bool = False
+
+    @field_validator("connection_ids")
+    @classmethod
+    def valid_connections(cls, value: list[str]) -> list[str]:
+        try:
+            normalized = [str(UUID(identity)) for identity in value]
+        except ValueError:
+            raise ValueError("Select valid connection identities") from None
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Select each connection once")
+        return normalized
 
 
 class IdentityTransformConfig(NodeConfig):

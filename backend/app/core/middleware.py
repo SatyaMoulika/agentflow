@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.exceptions import error_response
 from app.core.logging import request_id_context
+from app.core.tracing import traced_async
 
 logger = logging.getLogger("agentflow.http")
 
@@ -25,7 +26,10 @@ class RequestContextMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        await self._handle_http(scope, receive, send)
 
+    @traced_async("agentflow.http")
+    async def _handle_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         # Never trust/reflect a caller's correlation header as our server request ID.
         request_id = f"req_{uuid4().hex}"
         # ASGI lifespan state is shared by some transports; preserve its values but

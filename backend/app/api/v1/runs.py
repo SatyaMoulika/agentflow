@@ -29,6 +29,7 @@ from app.core.config import Settings
 from app.core.exceptions import REQUEST_ID_HEADER, ErrorResponse, error_response
 from app.core.tokens import AccessTokens
 from app.infrastructure.database.session import Database
+from app.modules.agents.schemas import AgentResumeRequest
 from app.modules.auth.schemas import UserResponse
 from app.modules.executions.event_stream import stream_events
 from app.modules.executions.exceptions import (
@@ -160,6 +161,37 @@ def cancel_workflow_run(
     run_id: UUID, response: Response, user: CurrentUser, database: DatabaseResource
 ) -> RunResponse:
     result = ExecutionService(database).cancel(run_id=run_id, owner_id=user.id)
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@router.post(
+    "/runs/{run_id}/agent-resume",
+    response_model=RunResponse,
+    operation_id="resume_workflow_agent",
+    summary="Continue an owned agent from its exact saved tool pause",
+    description=(
+        "Requires node_run_id and checkpoint_id from current run history. Only an explicitly "
+        "paused invocation is eligible. Consumes that checkpoint under the run lock; stale or "
+        "concurrent requests return 409 without external calls. Continues the same run, attempt "
+        "and thread "
+        "and its remaining route. Never resumes an unknown in-flight request after a crash. "
+        "After a lost response, inspect run history before another explicit continuation."
+    ),
+)
+def resume_workflow_agent(
+    run_id: UUID,
+    data: AgentResumeRequest,
+    response: Response,
+    user: CurrentUser,
+    database: DatabaseResource,
+    settings: AppSettings,
+) -> RunResponse:
+    result = ExecutionService(database, settings).resume_agent(
+        run_id=run_id,
+        owner_id=user.id,
+        data=data,
+    )
     response.headers["Cache-Control"] = "no-store"
     return result
 

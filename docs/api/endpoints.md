@@ -1,5 +1,9 @@
 # Proposed API inventory and contract alignment
 
+Gmail connection setup adds owner-authenticated `POST /gmail/authorize`, `POST /gmail/complete`, `GET /gmail/connections`, `GET /gmail/connections/{connection_id}/messages` and `DELETE /gmail/connections/{connection_id}`. The callback consumes owner-bound state once; connection responses exclude credentials. The message list returns up to ten inbox IDs; a manual workflow node reads selected plain text. Automatic triggers and actions are not yet available. See [Gmail setup](../learning-notes/gmail-connection.md). The current API has 33 operations on 28 paths; source migration head is 0012.
+
+Phase 8C adds `POST /runs/{run_id}/agent-resume` for an owned run, accepting the current `node_run_id` and `checkpoint_id` from run details. It consumes only an explicitly paused post-tool checkpoint; stale or concurrent requests return 409. Run details expose invocation checkpoint status and continuation count, and events record checkpointing and continuation. See [checkpoint setup and limits](../learning-notes/agent-checkpoints.md).
+
 Provider/generation continuation (head **0010**): generate/edit requests accept up
 to ten unique `connection_ids`. Server-authorized catalog metadata and provider-call
 metadata return with review-only proposals. Completion responses add `metadata`;
@@ -13,7 +17,7 @@ create/list/get/revoke, metadata-only responses, write-only optional bearer/API-
 credentials and encrypted storage. The `http` node config is only
 `{"connection_id":"<uuid>"}` and authorizes a fixed public HTTPS GET endpoint at
 execution time. No automatic retry/recovery or full-workflow retry is offered for
-HTTP graphs. Head is 0009; the current API has 27 operations on 22 paths. See
+HTTP graphs. At that phase, head was 0009 and the API had 27 operations on 22 paths. See
 [connection contracts and limits](../learning-notes/secure-http-connections.md).
 
 Phase 6D extends owned run details with nullable `next_retry_at`, `retry_node_id`
@@ -64,7 +68,7 @@ Phase 0 target inventory, updated through Phase 5D (4 November 2026). **Auth/hea
 
 Declare the static `/workflows/generate` route before a dynamic workflow-ID route, or otherwise ensure routing distinguishes them. All data endpoints require authentication; auth/health routes have their documented exceptions.
 
-**Implemented additions:** `POST /auth/logout` revokes the represented refresh family and clears its cookies. `POST /ai/completions` provides the Groq connection test. The API has 23 implemented operations on 20 paths, including new-workflow generation, edit proposals, run event listing and streaming. Logout does not revoke all login families or already issued access JWTs. Registration still issues no cookies/tokens. Also propose a DB-aware readiness endpoint when deployment health checks require it; liveness and readiness are distinct.
+**Implemented additions:** `POST /auth/logout` revokes the represented refresh family and clears its cookies. `POST /ai/completions` provides the Groq connection test. The API also includes new-workflow generation, edit proposals, run event listing and streaming, and agent continuation. Logout does not revoke all login families or already issued access JWTs. Registration still issues no cookies/tokens. Also propose a DB-aware readiness endpoint when deployment health checks require it; liveness and readiness are distinct.
 
 Dashboard aggregates, persistent profile/preferences and connection testing/updating are not covered fully by the baseline. New-workflow generation is available for review in the active frontend; version-bound AI editing of saved workflows remains planned.
 
@@ -248,7 +252,7 @@ Optional labels/positions are presentation metadata. Restrict initial mapping lo
 
 Implemented Phase 5D command contract: the existing run body `{ "workflow_version_id": "<uuid>", "input": { "amount": 60000 } }` accepts an optional scoped `Idempotency-Key` header and strict `max_attempts` integer 1–3 (default 1), returning synchronous 201 for new/replayed runs. All six pure types remain supported. The service verifies the version belongs to the owned workflow. A replay returns the original run; a changed body under the same key returns 409. Retry creates a new run with `parent_run_id`, preserving the original history/version; an unsafe partial external retry requires reconciliation or an explicit refusal, not blind reexecution.
 
-The initial engine accepts structured manual input/text. Binary upload/OCR, invoice-specific database tables, real email/OAuth connectors, schedules/webhooks, parallel fan-out, user teams and arbitrary loops are separate scoped features. Finishing the invoice example can persist its result in `workflow_runs.output_json`; it does not imply a payment system or an undocumented file-upload API.
+The initial engine accepts structured manual input/text. Gmail read-only OAuth connection setup is implemented, while inbox processing, schedules/webhooks, email actions, binary upload/OCR, invoice-specific database tables, parallel fan-out, user teams and arbitrary loops remain separately scoped features. Finishing the invoice example can persist its result in `workflow_runs.output_json`; it does not imply a payment system or an undocumented file-upload API.
 
 ## Version-bound edit proposals
 
@@ -283,3 +287,11 @@ Migration 0004 adds command receipts and the frozen retry budget. The RunRespons
 `GET /api/v1/node-types` includes executable `agent`, configured with `instruction`, `input_field` and `max_tool_rounds` (strict integer 1–5, default 3). Existing exact-version run commands execute agent graphs synchronously with 201, including when pure background mode is enabled. They are excluded from automatic node retry, whole-workflow retry and worker recovery. No new route or migration is added.
 
 Successful output contains `model`, `content` and actual `tool_calls`. The attempt has optional `agent` operational metadata: `tool_rounds`, `provider_calls` (at most six validated provider metadata records) and a static `failure_reason` on failure. This metadata is stored in the same immutable node-status event as the result/failure; business outputs are not rewritten with operational usage. See [full limits and sample](../learning-notes/calculator-agent.md).
+
+## Authorized HTTP agent tools — Phase 8B
+
+The same `agent` type is displayed as **Tool Agent**. Its config adds `connection_ids`: up to ten unique UUID strings, empty by default for calculator-only compatibility. Saving freezes the selected allowlist in that immutable workflow version. Before each model turn the runner rechecks active ownership; before HTTP it reauthorizes/decrypts in a short session, then closes storage before external I/O. Missing/unowned/revoked bindings fail `CONNECTION_UNAVAILABLE` without leaking ownership. The model receives only selected ID/name/endpoint metadata and a code-owned `http_get` schema accepting one selected `connection_id`. Fetched JSON goes to Groq; credentials remain server-side. Generation/edit proposal authorization now covers these agent bindings as well as standalone HTTP nodes.
+
+HTTP uses the existing fixed public HTTPS GET executor with a 16 KiB agent response limit and the smaller of its 20-second budget or remaining agent time. Calculator and HTTP share the existing 1–5 tool limit and 60-second budget. Each endpoint can be fetched once per agent invocation, including duplicate URL aliases; a separate agent node/fresh run is a new invocation. Phase 8C adds explicit continuation from saved post-tool checkpoints; it does not add automatic request retry, background execution or recovery of an unknown external effect.
+
+Successful HTTP `tool_calls` add `id`, `tool: "http_get"`, `connection_id`, `status_code` and `body`; existing calculator entries retain their shape. Agent metadata adds defaulted `http_tool_attempts` and bounded `http_calls` containing selected IDs and recorded status/error. Old stored events decode with empty defaults. These summaries commit atomically with the terminal attempt event and remain available on failure; they do not guarantee that every external request completed or its usage is known. Static failure reasons now include `connection_unavailable`, `http_failure`, `duplicate_http_call` and `tool_result_too_large`. See the [sample flow, authorization and limits](../learning-notes/http-agent.md).

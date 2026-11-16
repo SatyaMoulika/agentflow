@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     )
     groq_timeout_seconds: int = Field(default=45, ge=1, le=120)
     connection_encryption_key: SecretStr | None = None
+    gmail_client_id: str | None = Field(default=None, min_length=1, max_length=300)
+    gmail_client_secret: SecretStr | None = None
+    gmail_redirect_uri: str | None = Field(default=None, min_length=1, max_length=500)
     worker_queue: str = Field(default="agentflow.transport", min_length=1, max_length=80)
     background_execution_enabled: bool = False
     worker_lease_seconds: int = Field(default=30, ge=5, le=3600)
@@ -88,6 +91,32 @@ class Settings(BaseSettings):
             if not valid:
                 raise ValueError("auth_allowed_origins must contain exact HTTP(S) origins")
         return values
+
+    @field_validator("gmail_redirect_uri")
+    @classmethod
+    def validate_gmail_redirect_uri(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            parsed = urlsplit(value)
+            valid = (
+                parsed.scheme in {"http", "https"}
+                and parsed.hostname is not None
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.path == "/integrations/gmail/callback"
+                and not parsed.query
+                and not parsed.fragment
+                and value.isascii()
+                and "\\" not in value
+                and not any(character.isspace() for character in value)
+                and (parsed.scheme == "https" or parsed.hostname in {"localhost", "127.0.0.1"})
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("gmail_redirect_uri must be a valid fixed callback URL")
+        return value
 
     @field_validator("jwt_secret_key", mode="before")
     @classmethod

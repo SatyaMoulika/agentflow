@@ -1,6 +1,11 @@
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type JsonObject = Record<string, Json>;
 export type ConnectionAuth = 'none' | 'bearer' | 'api_key';
+export interface GmailConnection {
+  id: string;
+  created_at: string;
+  revoked_at: string | null;
+}
 export interface PlannerConnection {
   id: string;
   name: string;
@@ -146,8 +151,20 @@ export interface NodeAttempt extends History {
   provider?: ProviderMetadata | null;
   agent?: {
     tool_rounds: number;
+    http_tool_attempts?: number;
+    http_calls?: {
+      connection_id: string;
+      status_code?: number | null;
+      error_code?: string | null;
+    }[];
     provider_calls: ProviderMetadata[];
     failure_reason?: string | null;
+  } | null;
+  checkpoint?: {
+    thread_id: string;
+    status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+    checkpoint_id: string | null;
+    resume_count: number;
   } | null;
   retry?: {
     scheduled_at: string;

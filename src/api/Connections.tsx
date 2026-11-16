@@ -37,7 +37,7 @@ export default function HttpConnections() {
       setEndpoint('');
       setSecret('');
       setPage(1);
-      setNotice(`Created ${row.name}. Select it on an HTTP GET node in the workflow editor.`);
+      setNotice(`Created ${row.name}. Select it on an HTTP GET or Tool Agent node in the editor.`);
       void cache.invalidateQueries({ queryKey: [...scope, 'connections'] });
     } catch (failure) {
       setError(failure);
@@ -63,8 +63,9 @@ export default function HttpConnections() {
     <section className="card api-panel api-form">
       <h2>HTTP connections</h2>
       <p>
-        Authorize one fixed public HTTPS endpoint per connection. HTTP GET nodes retrieve JSON from
-        that endpoint when you run a workflow. Workflow input is not sent.
+        Authorize one fixed public HTTPS endpoint per connection. HTTP GET nodes and selected agent
+        tools retrieve JSON when you run a workflow. Workflow input is not sent to endpoints. Agent
+        HTTP results are sent to Groq and stored in execution history.
       </p>
       <form className="api-form" onSubmit={(event) => void create(event)}>
         <label className="label" htmlFor="connection-name">
@@ -227,15 +228,26 @@ export function ConnectionSelector({
   );
 }
 
-export function PlannerConnectionPicker({
-  value,
-  disabled,
-  onChange,
-}: {
+interface ConnectionPickerProps {
   value: string[];
   disabled: boolean;
   onChange: (ids: string[]) => void;
-}) {
+}
+
+export function PlannerConnectionPicker(props: ConnectionPickerProps) {
+  return <ConnectionPicker {...props} mode="proposal" />;
+}
+
+export function AgentConnectionPicker(props: ConnectionPickerProps) {
+  return <ConnectionPicker {...props} mode="agent" />;
+}
+
+function ConnectionPicker({
+  value,
+  disabled,
+  onChange,
+  mode,
+}: ConnectionPickerProps & { mode: 'proposal' | 'agent' }) {
   const scope = useScope();
   const [page, setPage] = useState(1);
   const rows = useQuery({
@@ -244,11 +256,34 @@ export function PlannerConnectionPicker({
   });
   return (
     <details>
-      <summary>Allow AI to use HTTP connections ({value.length} selected)</summary>
+      <summary>
+        {mode === 'agent'
+          ? 'Allow this agent to fetch HTTP connections'
+          : 'Allow AI to use HTTP connections'}{' '}
+        ({value.length} selected)
+      </summary>
       <p className="muted">
-        Choose up to 10 connections. Their names and endpoint URLs are sent to Groq with your
-        request. Credentials stay on the server. No endpoint is called during generation.
+        {mode === 'agent'
+          ? 'Choose up to 10 connections. When you run this agent, their names, endpoint URLs and fetched JSON responses are sent to Groq and results are stored in execution history. Each endpoint can be fetched once per agent invocation. Credentials stay on the server. HTTP sends no workflow input.'
+          : 'Choose up to 10 connections. Their names and endpoint URLs are sent to Groq with your request. Credentials stay on the server. No endpoint is called during generation.'}
       </p>
+      {mode === 'agent' && value.length > 0 && (
+        <div aria-label="Selected agent connections">
+          {value.map((id) => (
+            <div key={id} className="api-actions">
+              <code>{id}</code>
+              <Button
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(value.filter((item) => item !== id))}
+              >
+                Remove selection
+              </Button>
+            </div>
+          ))}
+          <p className="muted">Missing or revoked selections must be removed before running.</p>
+        </div>
+      )}
       {rows.isPending && <Pending />}
       {rows.isError && <Failure error={rows.error} retry={() => void rows.refetch()} />}
       {rows.data && (

@@ -242,7 +242,9 @@ async def test_edit_proposal_is_owned_read_only_and_bound_to_saved_version(
     workflow_id, version_id = saved(repository_database, owners["a"])
     calls = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append(prompt)
         return {
             "model": "test-model",
@@ -285,7 +287,9 @@ async def test_edit_proposal_cannot_overwrite_a_version_saved_during_generation(
 ) -> None:
     workflow_id, version_id = saved(repository_database, owners["a"])
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         with repository_database.unit_of_work() as session:
             WorkflowRepository(session).append_version(
                 workflow_id=workflow_id, owner_id=owners["a"], expected_version=1, definition=GRAPH

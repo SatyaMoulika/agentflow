@@ -1,0 +1,3 @@
+{
+  "message": "Fetch the selected sample slideshow using http_get. Count the slides in its returned JSON, then use calculator to multiply the count by 10. Report the slideshow title, count and result."
+}

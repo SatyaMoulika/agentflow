@@ -1,24 +1,26 @@
 # Backend implementation plan
 
-## Current status — 10 November 2026
+## Current status — 16 November 2026
 
 This section is the authoritative phase status. The original design sequence below remains the roadmap; detailed historical snapshots live in the development log rather than competing current-status notices.
 
-| Phase | Status                         | Scope and remaining work                                                                                                                                                                                                                               |
-| ----- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1–5   | Implemented and verified       | Foundation, PostgreSQL, auth/ownership, immutable workflows, compilation, deterministic execution, retries, cancellation and command idempotency.                                                                                                      |
-| 6     | Implemented for pure workflows | Redis/Celery, durable outbox, claim leases/fences, recovery discovery, heartbeats and scheduled retries. External calls are excluded from automatic replay/recovery.                                                                                   |
-| 7     | Scoped implementation complete | Groq LLM, reviewed generation/version-bound edits, classify/extract, JSON parsing, protected fixed-endpoint HTTP GET, encrypted optional credentials, provider failures/usage and authorized connection selection. Browser acceptance remains pending. |
-| 8     | 8A implemented                 | Typed bounded LangGraph calculator loop, cancellation checks, per-call usage/history and active UI. Next: 8B authorized HTTP tool, then 8C persistent checkpoints.                                                                                     |
-| 9     | Partial                        | Authenticated SSE replay/reconnect/heartbeat and polling fallback exist. Correlated spans and Phoenix export remain.                                                                                                                                   |
-| 10    | Pending                        | Durable approval, authorization/expiry and safe resume/reconciliation.                                                                                                                                                                                 |
-| 11    | Partial                        | Real auth, workflow editor, integrations and run history are wired. Approval UI, browser/security/performance acceptance and deployment hardening remain.                                                                                              |
+| Phase | Status                          | Scope and remaining work                                                                                                                                                                                                                               |
+| ----- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1–5   | Implemented and verified        | Foundation, PostgreSQL, auth/ownership, immutable workflows, compilation, deterministic execution, retries, cancellation and command idempotency.                                                                                                      |
+| 6     | Implemented for pure workflows  | Redis/Celery, durable outbox, claim leases/fences, recovery discovery, heartbeats and scheduled retries. External calls are excluded from automatic replay/recovery.                                                                                   |
+| 7     | Scoped implementation complete  | Groq LLM, reviewed generation/version-bound edits, classify/extract, JSON parsing, protected fixed-endpoint HTTP GET, encrypted optional credentials, provider failures/usage and authorized connection selection. Browser acceptance remains pending. |
+| 8     | 8A/8B and scoped 8C implemented | Bounded LangGraph calculator/authorized HTTP tools and persistent checkpoints with explicit continuation at saved post-tool pauses. Unknown in-flight external calls are not automatically recovered.                                                  |
+| 9     | Partial                         | Authenticated SSE replay/reconnect/heartbeat and polling fallback exist. Fixed-name in-process trace instrumentation is in place; cross-process correlation and Phoenix export remain.                                                                 |
+| 10    | Pending                         | Durable approval, authorization/expiry and safe resume/reconciliation.                                                                                                                                                                                 |
+| 11    | Partial                         | Real auth, workflow editor, integrations and run history are wired. Approval UI, browser/security/performance acceptance and deployment hardening remain.                                                                                              |
 
-Current source migration head is **0010**. The configured development database was upgraded from 0009 to **0010** on 10 November 2026; `alembic check` reports no metadata drift. No fixtures or destructive tests were run against development.
+Current source and local development migration head is **0012**. Gmail connection tables were added on 13 November 2026; Alembic reports no metadata drift. The checkpoint schema was set up on 12 November. No fixtures or destructive tests were run against development.
 
-Verification baseline on 10 November 2026: **1,301 backend tests** passed with isolated PostgreSQL/Redis, Ruff lint/format and Pyright; **135 frontend tests**, lint, TypeScript and production build passed. See [verification](verification.md) for commands and limits. Provider/HTTP live synthetic results from the previous increment are documented in [provider hardening](learning-notes/provider-integration-hardening.md); they were not repeated in the status audit.
+Verification on 16 November 2026: the complete backend checker passed **1,390 tests** with isolated PostgreSQL/Redis, Ruff lint/format and Pyright; frontend checks passed **146 tests**, lint, TypeScript and production build. No live Google/Groq call or browser acceptance check was performed for this snapshot. The earlier synthetic live HTTP agent fetched two slides, used the calculator to produce **20**, replayed the committed command without external calls and refused a fresh run after revocation. Only a disposable test schema was used and removed. See [verification](verification.md) for commands and limits, and the [sample review](learning-notes/http-agent.md) for the exact flow.
 
-Operational setup is in the [real-data walkthrough](real-backend-walkthrough.md). Broader HTTP methods, OAuth/credential rotation and side-effect reconciliation are future expansion. No paid provider fallback is configured.
+Operational setup is in the [real-data walkthrough](real-backend-walkthrough.md). Broader HTTP methods, OAuth for additional providers, credential rotation and side-effect reconciliation are future expansion. No paid provider fallback is configured.
+
+The requested Gmail integration has a [separate incremental plan](gmail-implementation-plan.md). Owner-bound read-only OAuth connection setup and manual message reading are available but need Google project configuration and live verification; automatic triggers, approvals and Gmail actions remain to be implemented.
 
 ## Historical repository findings at Phase 0
 
@@ -89,7 +91,7 @@ After implementation: show the small diff, explain each file/function and import
 - Keep the existing private database, signing, Groq and optional connection-encryption settings; never commit their values.
 - Use only the guarded PostgreSQL/Redis test services for integration fixtures and migration round trips.
 - Browser acceptance remains outstanding: the browser access host was retried on 10 November 2026 and is unavailable.
-- **8A** implements typed LangGraph state and a bounded, read-only calculator tool loop; see [calculator agent](learning-notes/calculator-agent.md). Next are authorized HTTP agent tools (8B) and persistent checkpoints/recovery (8C).
+- **8A–8C** implements bounded LangGraph tools and durable state with explicit continuation at saved post-tool boundaries. See the [HTTP agent sample](learning-notes/http-agent.md) and [checkpoint guide](learning-notes/agent-checkpoints.md). External calls remain synchronous with no automatic replay of uncertain requests.
 
 Historical increment results and learning exercises are retained in the [development log](development-log.md) and individual [learning notes](learning-notes/provider-integration-hardening.md).
 

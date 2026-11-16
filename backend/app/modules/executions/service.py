@@ -17,7 +17,8 @@ from app.infrastructure.database.models import (
     WorkflowVersion,
 )
 from app.infrastructure.database.session import Database
-from app.modules.agents.schemas import AgentMetadata
+from app.modules.agents.models import AgentInvocation
+from app.modules.agents.schemas import AgentCheckpointResponse, AgentMetadata, AgentResumeRequest
 from app.modules.executions.commands import key_digest, request_digest
 from app.modules.executions.dispatch import enqueue_run
 from app.modules.executions.dispatch_models import WorkflowDispatch
@@ -28,6 +29,11 @@ from app.modules.executions.exceptions import (
     WorkflowNotExecutableError,
 )
 from app.modules.executions.provider_schemas import ProviderMetadata
+from app.modules.executions.recovery import (
+    InconsistentHistoryError,
+    StoredAttempt,
+    reconstruct_progress,
+)
 from app.modules.executions.repository import ExecutionRepository
 from app.modules.executions.retry_models import NodeRetry
 from app.modules.executions.runner import RETRY_SAFE_TYPES, WorkflowRunner
@@ -253,6 +259,100 @@ class ExecutionService:
             idempotency_key=idempotency_key,
         )
 
+    def resume_agent(
+        self,
+        *,
+        run_id: UUID,
+        owner_id: UUID,
+        data: AgentResumeRequest,
+    ) -> RunResponse:
+        """Consume one exact paused checkpoint; never claim an unknown running invocation."""
+        try:
+            with self.database.session() as session:
+                repository = ExecutionRepository(session)
+                run = repository.lock_owned(run_id=run_id, owner_id=owner_id)
+                invocation = session.get(AgentInvocation, data.node_run_id)
+                if invocation is None or invocation.workflow_run_id != run_id:
+                    raise ExecutionNotFoundError()
+                if (
+                    run.status != RunStatus.RUNNING
+                    or run.revision != 1
+                    or invocation.status != "paused"
+                    or invocation.checkpoint_id != data.checkpoint_id
+                    or invocation.resume_count >= 5
+                    or session.get(WorkflowDispatch, run_id) is not None
+                ):
+                    raise ExecutionConflictError()
+                version = session.get(WorkflowVersion, run.workflow_version_id)
+                assert version is not None
+                definition, initial = deepcopy(version.definition_json), deepcopy(run.input_json)
+                rows = session.scalars(
+                    select(NodeRun)
+                    .where(NodeRun.workflow_run_id == run_id)
+                    .order_by(NodeRun.created_at, NodeRun.id)
+                ).all()
+                attempts = [
+                    StoredAttempt(
+                        row.node_id, row.attempt_number, row.status, deepcopy(row.output_json)
+                    )
+                    for row in rows
+                ]
+                selected = next((row for row in rows if row.id == data.node_run_id), None)
+                if selected is None or selected.status != NodeStatus.RUNNING:
+                    raise ExecutionConflictError()
+                node_id, sequence, max_attempts = (
+                    selected.node_id,
+                    run.event_sequence,
+                    run.max_attempts,
+                )
+            # Reconstruct only the committed selected route. Earlier successful external
+            # outputs are read, not executed again. Compilation holds no storage transaction.
+            plan = compile_workflow(definition).plan
+            if plan is None or any(node.type not in EXECUTION_READY_TYPES for node in plan.nodes):
+                raise WorkflowNotExecutableError()
+            try:
+                progress = reconstruct_progress(plan, initial, attempts)
+            except InconsistentHistoryError:
+                raise ExecutionConflictError() from None
+            if (
+                progress.state != "interrupted"
+                or progress.next_node_id != node_id
+                or next(node for node in plan.nodes if node.id == node_id).type != "agent"
+            ):
+                raise ExecutionConflictError()
+            with self.database.unit_of_work() as session:
+                repository = ExecutionRepository(session)
+                run = repository.lock_owned(run_id=run_id, owner_id=owner_id)
+                invocation = session.get(AgentInvocation, data.node_run_id)
+                if (
+                    run.status != RunStatus.RUNNING
+                    or run.event_sequence != sequence
+                    or invocation is None
+                    or invocation.status != "paused"
+                    or invocation.checkpoint_id != data.checkpoint_id
+                ):
+                    raise ExecutionConflictError()
+                invocation.status = "running"
+                invocation.resume_count += 1
+                repository._event(
+                    run,
+                    EventType.AGENT_RESUMED,
+                    {"checkpoint_id": data.checkpoint_id},
+                    data.node_run_id,
+                )
+            WorkflowRunner(self.database, self.settings).continue_agent(
+                run_id=run_id,
+                owner_id=owner_id,
+                plan=plan,
+                progress=progress,
+                attempt_id=data.node_run_id,
+                checkpoint_id=data.checkpoint_id,
+                max_attempts=max_attempts,
+            )
+            return self.get(run_id=run_id, owner_id=owner_id)
+        except (OperationalError, TimeoutError):
+            raise ExecutionStorageUnavailableError(run_id) from None
+
     def cancel(self, *, run_id: UUID, owner_id: UUID) -> RunResponse:
         try:
             with self.database.unit_of_work() as session:
@@ -268,6 +368,9 @@ class ExecutionService:
                     ).all()
                     for attempt in attempts:
                         if attempt.status not in NODE_TERMINAL:
+                            invocation = session.get(AgentInvocation, attempt.id)
+                            if invocation is not None:
+                                invocation.status = "cancelled"
                             repository.transition_attempt(
                                 run_id=run_id,
                                 owner_id=owner_id,
@@ -336,17 +439,33 @@ class ExecutionService:
                 agents = {
                     event.node_run_id: AgentMetadata.model_validate(event.event_payload["agent"])
                     for event in session.scalars(
-                        select(ExecutionEvent).where(
+                        select(ExecutionEvent)
+                        .where(
                             ExecutionEvent.workflow_run_id == run_id,
-                            ExecutionEvent.event_type == EventType.NODE_STATUS_CHANGED,
+                            ExecutionEvent.event_type.in_(
+                                [
+                                    EventType.NODE_STATUS_CHANGED,
+                                    EventType.AGENT_CHECKPOINTED,
+                                ]
+                            ),
                             ExecutionEvent.event_payload.op("?")("agent"),
                         )
+                        .order_by(ExecutionEvent.sequence)
+                    )
+                }
+                invocations = {
+                    row.node_run_id: row
+                    for row in session.scalars(
+                        select(AgentInvocation).where(AgentInvocation.workflow_run_id == run_id)
                     )
                 }
                 for row in attempts:
                     node = NodeAttemptResponse.model_validate(row)
                     node.provider = providers.get(row.id)
                     node.agent = agents.get(row.id)
+                    invocation = invocations.get(row.id)
+                    if invocation is not None:
+                        node.checkpoint = AgentCheckpointResponse.model_validate(invocation)
                     retry = retries.get(row.id)
                     if retry is not None:
                         node.retry = RetryScheduleResponse.model_validate(retry)

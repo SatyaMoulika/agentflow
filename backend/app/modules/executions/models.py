@@ -252,7 +252,8 @@ class ExecutionEvent(Base):
         UniqueConstraint("workflow_run_id", "sequence", name="uq_execution_events_run_sequence"),
         CheckConstraint("sequence >= 1", name="sequence_positive"),
         CheckConstraint(
-            "(event_type IN ('node.created', 'node.status_changed', 'node.retry_scheduled')) "
+            "(event_type IN ('node.created', 'node.status_changed', 'node.retry_scheduled', "
+            "'agent.checkpointed', 'agent.resumed')) "
             "= (node_run_id IS NOT NULL)",
             name="event_node_context",
         ),

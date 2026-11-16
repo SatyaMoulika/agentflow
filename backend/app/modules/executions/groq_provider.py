@@ -9,11 +9,14 @@ import httpx
 from pydantic import ValidationError
 
 from app.core.config import Settings
+from app.core.tracing import traced
 from app.modules.executions.payloads import InvalidExecutionPayloadError, copy_payload
 from app.modules.executions.provider_schemas import ProviderFailure, ProviderMetadata, TokenUsage
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MAX_RESPONSE_BYTES = 524288
+CONNECT_TIMEOUT_SECONDS = 5.0
+PROPOSAL_COMPLETION_TOKENS = 4096
 ERROR_MESSAGES: dict[str, str] = {
     "PROVIDER_NOT_CONFIGURED": "Groq is not configured on the server.",
     "PROVIDER_AUTH_FAILED": "Groq rejected the configured credentials or permissions.",
@@ -79,8 +82,15 @@ def _failure(status: int, payload: Any) -> ProviderFailure:
     return "PROVIDER_UNAVAILABLE" if status >= 500 else "PROVIDER_INVALID_RESPONSE"
 
 
-def complete(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, Any]:
-    return _request(settings, [{"role": "user", "content": prompt}], json_mode=json_mode)
+def complete(
+    settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+) -> dict[str, Any]:
+    return _request(
+        settings,
+        [{"role": "user", "content": prompt}],
+        json_mode=json_mode,
+        workflow_proposal=workflow_proposal,
+    )
 
 
 def complete_tools(
@@ -94,6 +104,7 @@ def complete_tools(
     return _request(settings, messages, tools=tools, timeout_seconds=timeout_seconds)
 
 
+@traced("agentflow.groq")
 def _request(
     settings: Settings,
     messages: list[dict[str, Any]],
@@ -101,6 +112,7 @@ def _request(
     json_mode: bool = False,
     tools: list[dict[str, Any]] | None = None,
     timeout_seconds: float | None = None,
+    workflow_proposal: bool = False,
 ) -> dict[str, Any]:
     started = monotonic()
     metadata = ProviderMetadata(requested_model=settings.groq_model, duration_ms=0)
@@ -136,7 +148,11 @@ def _request(
     try:
         deadline = started + timeout
         with (
-            httpx.Client(timeout=timeout, trust_env=False, follow_redirects=False) as client,
+            httpx.Client(
+                timeout=httpx.Timeout(timeout, connect=min(timeout, CONNECT_TIMEOUT_SECONDS)),
+                trust_env=False,
+                follow_redirects=False,
+            ) as client,
             client.stream(
                 "POST",
                 GROQ_URL,
@@ -148,7 +164,13 @@ def _request(
                 json={
                     "model": settings.groq_model,
                     "messages": messages,
-                    "max_completion_tokens": 2048 if json_mode else 1024,
+                    "max_completion_tokens": (
+                        PROPOSAL_COMPLETION_TOKENS
+                        if workflow_proposal
+                        else 2048
+                        if json_mode
+                        else 1024
+                    ),
                     **({"response_format": {"type": "json_object"}} if json_mode else {}),
                     **(
                         {"tools": tools, "tool_choice": "auto", "parallel_tool_calls": False}

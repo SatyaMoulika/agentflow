@@ -5,6 +5,7 @@ import type {
   ExecutionEventPage,
   JsonObject,
   HttpConnection,
+  GmailConnection,
   ProviderMetadata,
   LoginResult,
   Page,
@@ -315,6 +316,18 @@ const query = (values: Record<string, string | number | undefined>) => {
   return params.size ? `?${params}` : '';
 };
 export const api = {
+  gmailAuthorize: () => client.request<{ url: string }>('/gmail/authorize', { method: 'POST' }),
+  gmailComplete: (state: string, code: string) =>
+    client.request<GmailConnection>('/gmail/complete', {
+      method: 'POST',
+      body: JSON.stringify({ state, code }),
+    }),
+  gmailConnections: (signal?: AbortSignal) =>
+    client.request<GmailConnection[]>('/gmail/connections', { signal }),
+  gmailMessages: (id: string) =>
+    client.request<string[]>(`/gmail/connections/${encodeURIComponent(id)}/messages`),
+  gmailRevoke: (id: string) =>
+    client.request<void>(`/gmail/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   connections: (page = 1, signal?: AbortSignal) =>
     client.request<Page<HttpConnection>>(`/connections${query({ page, page_size: 20 })}`, {
       signal,
@@ -405,6 +418,11 @@ export const api = {
     client.request<RunDetail>(`/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
   runs: (values: Record<string, string | number | undefined> = {}, signal?: AbortSignal) =>
     client.request<Page<RunItem>>(`/runs${query(values)}`, { signal }),
+  resumeAgent: (id: string, nodeRunId: string, checkpointId: string) =>
+    client.request<RunDetail>(`/runs/${encodeURIComponent(id)}/agent-resume`, {
+      method: 'POST',
+      body: JSON.stringify({ node_run_id: nodeRunId, checkpoint_id: checkpointId }),
+    }),
   runDetail: (id: string, signal?: AbortSignal) =>
     client.request<RunDetail>(`/runs/${encodeURIComponent(id)}`, { signal }),
   runEvents: (id: string, afterSequence: number, signal?: AbortSignal) =>

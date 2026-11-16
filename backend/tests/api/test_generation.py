@@ -108,9 +108,13 @@ def test_invalid_graph_gets_one_regeneration_using_only_static_diagnostics(
 ) -> None:
     invalid = {**PROPOSAL, "definition": {**PROPOSAL["definition"], "edges": []}}
     calls: list[str] = []
+    proposal_modes: list[bool] = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append(prompt)
+        proposal_modes.append(json_mode and workflow_proposal)
         result = invalid if len(calls) == 1 else PROPOSAL
         return {"content": json.dumps(result), "model": "test-model"}
 
@@ -118,6 +122,7 @@ def test_invalid_graph_gets_one_regeneration_using_only_static_diagnostics(
     result = generate(Settings(), "private user request")
     assert result.status == "ready" and result.repair_attempted
     assert len(calls) == 2
+    assert proposal_modes == [True, True]
     assert "INVALID_OUTPUT_HANDLES" in calls[1]
     assert json.dumps(invalid) not in calls[1]
 
@@ -127,7 +132,9 @@ def test_repeated_invalid_proposal_stops_after_two_requests(
 ) -> None:
     calls = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append(prompt)
         return {"content": "private invalid content", "model": "test-model"}
 
@@ -141,7 +148,9 @@ def test_repeated_invalid_proposal_stops_after_two_requests(
 def test_rate_limit_never_causes_regeneration(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append(prompt)
         raise GroqError(429)
 
@@ -156,7 +165,9 @@ def test_rate_limit_on_regeneration_stops_without_a_third_request(
 ) -> None:
     calls = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append(prompt)
         if len(calls) == 1:
             return {"content": "invalid", "model": "test-model"}
@@ -179,7 +190,9 @@ async def test_generation_returns_validated_proposal_without_saving(
 ) -> None:
     calls = []
 
-    def fake(settings: Settings, prompt: str, *, json_mode: bool = False) -> dict[str, str]:
+    def fake(
+        settings: Settings, prompt: str, *, json_mode: bool = False, workflow_proposal: bool = False
+    ) -> dict[str, str]:
         calls.append((prompt, json_mode))
         return {"content": json.dumps(PROPOSAL), "model": "test-model"}
 

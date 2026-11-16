@@ -109,6 +109,12 @@ async def test_openapi_registration_schemas_match_public_contract() -> None:
         "/api/v1/runs",
         "/api/v1/runs/{run_id}/cancel",
         "/api/v1/runs/{run_id}/retry",
+        "/api/v1/runs/{run_id}/agent-resume",
+        "/api/v1/gmail/authorize",
+        "/api/v1/gmail/complete",
+        "/api/v1/gmail/connections",
+        "/api/v1/gmail/connections/{connection_id}",
+        "/api/v1/gmail/connections/{connection_id}/messages",
     }
     operation = schema["paths"]["/api/v1/auth/register"]["post"]
     assert operation["operationId"] == "register_user"

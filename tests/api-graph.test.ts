@@ -53,6 +53,14 @@ describe('server graph and input editing', () => {
       instruction: 'Use the calculator for arithmetic and explain the result.',
       input_field: 'message',
       max_tool_rounds: 3,
+      connection_ids: [],
+      pause_after_tools: false,
+    });
+  });
+  it('requires an explicit Gmail connection and message ID field', () => {
+    expect(defaultNode('gmail_read').config).toEqual({
+      connection_id: '',
+      message_id_field: 'message_id',
     });
   });
 });

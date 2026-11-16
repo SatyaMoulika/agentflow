@@ -29,6 +29,9 @@ def test_all_relationships_configure_without_ambiguous_foreign_keys() -> None:
         "workflow_dispatches",
         "node_retries",
         "connections",
+        "agent_invocations",
+        "gmail_authorizations",
+        "gmail_connections",
     }
     assert User.workflows.property.back_populates == "owner"
     assert Workflow.versions.property.back_populates == "workflow"

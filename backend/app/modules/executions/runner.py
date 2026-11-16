@@ -1,16 +1,23 @@
 """Synchronous pure-node runner with bounded retries and cooperative cancellation."""
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.core.config import Settings
+from app.core.tracing import traced
 from app.infrastructure.database.session import Database
-from app.modules.agents.runner import AgentExecutionError, execute_agent
+from app.modules.agents.checkpoints import checkpoint_saver
+from app.modules.agents.http_tools import AgentHttpTools
+from app.modules.agents.models import AgentInvocation
+from app.modules.agents.runner import AgentExecutionError, AgentPaused, execute_agent
 from app.modules.connections.http_executor import get_json
 from app.modules.connections.secrets import ConnectionUnavailableError
 from app.modules.connections.service import ConnectionService
 from app.modules.executions.dispatch_models import WorkflowDispatch
-from app.modules.executions.exceptions import ExecutionConflictError
+from app.modules.executions.exceptions import (
+    ExecutionConflictError,
+    ExecutionStorageUnavailableError,
+)
 from app.modules.executions.groq_provider import GroqError, complete
 from app.modules.executions.operations import (
     NodeExecutionError,
@@ -20,9 +27,18 @@ from app.modules.executions.operations import (
     resolve_input,
 )
 from app.modules.executions.payloads import copy_payload
+from app.modules.executions.recovery import ReconstructedProgress
 from app.modules.executions.repository import ExecutionRepository
-from app.modules.executions.state import RETRYABLE_FAILURE_CODES, FailureCode, NodeStatus, RunStatus
+from app.modules.executions.state import (
+    RETRYABLE_FAILURE_CODES,
+    EventType,
+    FailureCode,
+    NodeStatus,
+    RunStatus,
+)
 from app.modules.executions.structured_tools import prepare, validate
+from app.modules.gmail.provider import GmailProviderError
+from app.modules.gmail.service import GmailConnectionNotFound, GmailNotConfigured, GmailService
 from app.modules.workflows.compiler import CompiledNode, CompiledWorkflow
 from app.modules.workflows.node_configs import AgentConfig
 
@@ -71,6 +87,11 @@ class WorkflowRunner:
                 provider_metadata=provider_metadata,
                 agent_metadata=agent_metadata,
             )
+            invocation = session.get(AgentInvocation, attempt_id)
+            if invocation is not None:
+                invocation.status = "failed"
+                if agent_metadata is not None and agent_metadata.get("checkpoint_id"):
+                    invocation.checkpoint_id = agent_metadata["checkpoint_id"]
             if terminal:
                 repository.transition_run(
                     run_id=run_id,
@@ -80,6 +101,7 @@ class WorkflowRunner:
                     error_code=code,
                 )
 
+    @traced("agentflow.node")
     def _execute(
         self,
         *,
@@ -91,6 +113,8 @@ class WorkflowRunner:
         visited: set[str],
         nodes: dict[str, CompiledNode],
         max_attempts: int,
+        resume_attempt_id: UUID | None = None,
+        resume_checkpoint_id: str | None = None,
     ) -> (
         tuple[dict[str, Any], str | None, UUID, dict[str, Any] | None, dict[str, Any] | None] | None
     ):
@@ -104,26 +128,48 @@ class WorkflowRunner:
         except Exception:
             resolved, mapping_error = {}, FailureCode.INTERNAL_FAILURE
         for number in range(1, max_attempts + 1):
+            thread_id = None
             with self.database.unit_of_work() as session:
                 repository = ExecutionRepository(session)
                 self._check(repository, run_id, owner_id)
-                attempt = repository.add_attempt(
-                    run_id=run_id,
-                    owner_id=owner_id,
-                    expected_run_revision=1,
-                    node_id=node.id,
-                    input_json=resolved,
-                )
-                attempt_id = attempt.id
-                repository.transition_attempt(
-                    run_id=run_id,
-                    owner_id=owner_id,
-                    attempt_id=attempt_id,
-                    expected_run_revision=1,
-                    expected_revision=0,
-                    target=NodeStatus.RUNNING if mapping_error is None else NodeStatus.FAILED,
-                    error_code=mapping_error,
-                )
+                if resume_attempt_id is None:
+                    attempt = repository.add_attempt(
+                        run_id=run_id,
+                        owner_id=owner_id,
+                        expected_run_revision=1,
+                        node_id=node.id,
+                        input_json=resolved,
+                    )
+                    attempt_id = attempt.id
+                    repository.transition_attempt(
+                        run_id=run_id,
+                        owner_id=owner_id,
+                        attempt_id=attempt_id,
+                        expected_run_revision=1,
+                        expected_revision=0,
+                        target=NodeStatus.RUNNING if mapping_error is None else NodeStatus.FAILED,
+                        error_code=mapping_error,
+                    )
+                    if node.type == "agent" and mapping_error is None:
+                        invocation = AgentInvocation(
+                            node_run_id=attempt_id, workflow_run_id=run_id, thread_id=uuid4()
+                        )
+                        session.add(invocation)
+                        session.flush()
+                        thread_id = invocation.thread_id
+                else:
+                    attempt_id = resume_attempt_id
+                    invocation = session.get(AgentInvocation, attempt_id)
+                    if (
+                        node.type != "agent"
+                        or invocation is None
+                        or invocation.workflow_run_id != run_id
+                        or invocation.status != "running"
+                        or invocation.checkpoint_id != resume_checkpoint_id
+                        or mapping_error is not None
+                    ):
+                        raise ExecutionConflictError()
+                    thread_id = invocation.thread_id
                 if mapping_error is not None:
                     repository.transition_run(
                         run_id=run_id,
@@ -139,6 +185,7 @@ class WorkflowRunner:
             agent_metadata = None
             try:
                 if node.type == "agent":
+                    assert thread_id is not None
                     if self.settings is None:
                         raise NodeExecutionError(FailureCode.PROVIDER_NOT_CONFIGURED)
 
@@ -147,15 +194,60 @@ class WorkflowRunner:
                             self._check(ExecutionRepository(active_session), run_id, owner_id)
 
                     try:
-                        output, agent_metadata = execute_agent(
-                            self.settings,
-                            AgentConfig.model_validate(config),
-                            resolved.get(config["input_field"]),
-                            check_active=check_active,
-                        )
+                        agent_config = AgentConfig.model_validate(config)
+                        with checkpoint_saver(self.database) as saver:
+                            output, agent_metadata = execute_agent(
+                                self.settings,
+                                agent_config,
+                                resolved.get(config["input_field"]),
+                                check_active=check_active,
+                                http_tools=AgentHttpTools(
+                                    self.database,
+                                    self.settings,
+                                    owner_id,
+                                    agent_config.connection_ids,
+                                ),
+                                checkpointer=saver,
+                                thread_id=str(thread_id),
+                                resume_checkpoint_id=resume_checkpoint_id,
+                            )
+                    except AgentPaused as pause:
+                        with self.database.unit_of_work() as session:
+                            repository = ExecutionRepository(session)
+                            self._check(repository, run_id, owner_id)
+                            run = repository.lock_owned(run_id=run_id, owner_id=owner_id)
+                            invocation = session.get(AgentInvocation, attempt_id)
+                            if invocation is None or invocation.status != "running":
+                                raise ExecutionConflictError() from None
+                            invocation.status = "paused"
+                            invocation.checkpoint_id = pause.checkpoint_id
+                            repository._event(
+                                run,
+                                EventType.AGENT_CHECKPOINTED,
+                                {"checkpoint_id": pause.checkpoint_id, "agent": pause.metadata},
+                                attempt_id,
+                            )
+                        return None
                     except AgentExecutionError as error:
                         agent_metadata = error.metadata
                         raise
+                elif node.type == "gmail_read":
+                    message_id = resolved.get(config["message_id_field"])
+                    if self.settings is None or not isinstance(message_id, str):
+                        raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE)
+                    try:
+                        text = GmailService(self.database, self.settings).read_message(
+                            owner_id, UUID(config["connection_id"]), message_id
+                        )
+                        output = copy_payload({"text": text, "message_id": message_id})
+                    except (
+                        GmailConnectionNotFound,
+                        GmailNotConfigured,
+                        GmailProviderError,
+                        ConnectionUnavailableError,
+                        ValueError,
+                    ):
+                        raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE) from None
                 elif node.type == "http":
                     if self.settings is None:
                         raise NodeExecutionError(FailureCode.CONNECTION_UNAVAILABLE)
@@ -203,6 +295,8 @@ class WorkflowRunner:
                 if following is not None and (following in visited or following not in nodes):
                     raise NodeExecutionError(FailureCode.INTERNAL_FAILURE)
                 return output, following, attempt_id, provider_metadata, agent_metadata
+            except ExecutionStorageUnavailableError:
+                raise ExecutionStorageUnavailableError(run_id) from None
             except _Cancelled:
                 raise
             except NodeExecutionError as error:
@@ -276,9 +370,62 @@ class WorkflowRunner:
             )
         incoming = copy_payload(input_data)
         outputs: dict[str, dict[str, Any]] = {}
-        nodes = {node.id: node for node in plan.nodes}
         visited: set[str] = set()
         current = plan.entry_node_id
+        self._continue(
+            run_id=run_id,
+            owner_id=owner_id,
+            plan=plan,
+            incoming=incoming,
+            outputs=outputs,
+            visited=visited,
+            current=current,
+            max_attempts=max_attempts,
+        )
+
+    def continue_agent(
+        self,
+        *,
+        run_id: UUID,
+        owner_id: UUID,
+        plan: CompiledWorkflow,
+        progress: ReconstructedProgress,
+        attempt_id: UUID,
+        checkpoint_id: str,
+        max_attempts: int,
+    ) -> None:
+        assert progress.next_node_id is not None
+        try:
+            self._continue(
+                run_id=run_id,
+                owner_id=owner_id,
+                plan=plan,
+                incoming=progress.incoming,
+                outputs=progress.outputs,
+                visited=set(progress.visited),
+                current=progress.next_node_id,
+                max_attempts=max_attempts,
+                resume_attempt_id=attempt_id,
+                resume_checkpoint_id=checkpoint_id,
+            )
+        except _Cancelled:
+            return
+
+    def _continue(
+        self,
+        *,
+        run_id: UUID,
+        owner_id: UUID,
+        plan: CompiledWorkflow,
+        incoming: dict[str, Any],
+        outputs: dict[str, dict[str, Any]],
+        visited: set[str],
+        current: str,
+        max_attempts: int,
+        resume_attempt_id: UUID | None = None,
+        resume_checkpoint_id: str | None = None,
+    ) -> None:
+        nodes = {node.id: node for node in plan.nodes}
         while True:
             node = nodes[current]
             visited.add(node.id)
@@ -291,7 +438,10 @@ class WorkflowRunner:
                 visited=visited,
                 nodes=nodes,
                 max_attempts=max_attempts,
+                resume_attempt_id=resume_attempt_id,
+                resume_checkpoint_id=resume_checkpoint_id,
             )
+            resume_attempt_id, resume_checkpoint_id = None, None
             if result is None:
                 return
             output, following, attempt_id, provider_metadata, agent_metadata = result
@@ -309,6 +459,11 @@ class WorkflowRunner:
                     provider_metadata=provider_metadata,
                     agent_metadata=agent_metadata,
                 )
+                invocation = session.get(AgentInvocation, attempt_id)
+                if invocation is not None:
+                    invocation.status = "completed"
+                    if agent_metadata is not None:
+                        invocation.checkpoint_id = agent_metadata.get("checkpoint_id")
                 if node.type == "end":
                     for other in plan.nodes:
                         if other.id in visited:

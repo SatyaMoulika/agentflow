@@ -71,6 +71,7 @@ export function starterDefinition(): Definition {
 export function defaultNode(type: string, start = 'start', index = 0): GraphNode {
   let config: JsonObject = {};
   if (type === 'http') config = { connection_id: '' };
+  if (type === 'gmail_read') config = { connection_id: '', message_id_field: 'message_id' };
   if (type === 'transform') config = { operation: 'identity' };
   if (type === 'groq')
     config = { instruction: 'Draft a helpful response to the message.', input_field: 'message' };
@@ -79,6 +80,8 @@ export function defaultNode(type: string, start = 'start', index = 0): GraphNode
       instruction: 'Use the calculator for arithmetic and explain the result.',
       input_field: 'message',
       max_tool_rounds: 3,
+      connection_ids: [],
+      pause_after_tools: false,
     };
   if (type === 'json_parser') config = { input_field: 'text' };
   if (type === 'classify') config = { input_field: 'text', labels: ['positive', 'negative'] };

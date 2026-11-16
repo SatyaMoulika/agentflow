@@ -66,7 +66,7 @@ async def test_present_credential_needs_database_and_cannot_fake_logout_success(
 
 async def test_logout_openapi_declares_no_body_bearer_or_204_json() -> None:
     schema = create_app().openapi()
-    assert len(schema["paths"]) == 22
+    assert len(schema["paths"]) == 28
     assert not any("_test" in path for path in schema["paths"])
     operation = schema["paths"]["/api/v1/auth/logout"]["post"]
     assert "requestBody" not in operation and not operation.get("security")

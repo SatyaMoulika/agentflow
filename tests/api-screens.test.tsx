@@ -8,8 +8,12 @@ import AuthPage from '../src/api/AuthPage';
 import Editor from '../src/api/Editor';
 import { CreateWorkflow, Dashboard, WorkflowList, RunView, Unavailable } from '../src/api/pages';
 import { starterDefinition } from '../src/api/graph';
-import HttpConnections, { PlannerConnectionPicker } from '../src/api/Connections';
+import HttpConnections, {
+  AgentConnectionPicker,
+  PlannerConnectionPicker,
+} from '../src/api/Connections';
 import { ProviderDetails } from '../src/api/ProviderDetails';
+import GmailConnections, { GmailConnectionSelector } from '../src/api/GmailConnections';
 const user = {
   id: '12345678-1234-1234-1234-123456789abc',
   email: 'actual@example.com',
@@ -38,6 +42,125 @@ function authenticated() {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('routed real API views', () => {
+  it('shows connected Gmail state without claiming mailbox automation is available', () => {
+    authenticated();
+    const markup = render('/integrations', <GmailConnections />, (cache) =>
+      cache.setQueryData(
+        [user.id, 1, 'gmail-connections'],
+        [{ id, created_at: '2026-11-13T00:00:00Z', revoked_at: null }],
+      ),
+    );
+    expect(markup).toContain('Connect Gmail');
+    expect(markup).toContain('Connected');
+    expect(markup).toContain('Disconnect');
+    expect(markup).toContain('still being built');
+  });
+  it('discloses that Gmail text is stored and can be sent to Groq', () => {
+    authenticated();
+    const markup = render(
+      '/workflows/new',
+      <GmailConnectionSelector value="" disabled={false} onChange={() => {}} />,
+      (cache) => cache.setQueryData([user.id, 1, 'gmail-connections'], []),
+    );
+    expect(markup).toContain('stored in run history');
+    expect(markup).toContain('sent to Groq');
+  });
+  it.each(['paused', 'running', 'completed', 'cancelled'])(
+    'shows saved agent state and offers continuation only for a paused invocation (%s)',
+    (checkpointStatus) => {
+      authenticated();
+      const definition = starterDefinition();
+      definition.nodes.splice(1, 0, {
+        id: 'agent',
+        type: 'agent',
+        config: { instruction: 'Calculate.', input_field: 'message' },
+      });
+      const markup = render(
+        `/executions/${id}`,
+        <RunView />,
+        (cache) =>
+          cache.setQueryData([user.id, 1, 'run', id], {
+            id,
+            workflow_id: id,
+            workflow_version_id: id,
+            status: ['paused', 'running'].includes(checkpointStatus)
+              ? 'running'
+              : checkpointStatus === 'completed'
+                ? 'succeeded'
+                : 'cancelled',
+            max_attempts: 1,
+            parent_run_id: null,
+            input: {},
+            output: null,
+            error_code: null,
+            created_at: '2026-11-11T00:00:00Z',
+            started_at: '2026-11-11T00:00:00Z',
+            completed_at: null,
+            event_sequence: 0,
+            version: { id, version_number: 1, definition },
+            node_runs: [
+              {
+                id: 'attempt',
+                node_id: 'agent',
+                attempt_number: 1,
+                status: 'running',
+                input: {},
+                output: null,
+                error_code: null,
+                checkpoint: {
+                  thread_id: 'saved-thread',
+                  status: checkpointStatus,
+                  checkpoint_id: id,
+                  resume_count: 1,
+                },
+              },
+            ],
+          }),
+        '/executions/:executionId',
+      );
+      expect(markup).toContain('saved-thread');
+      expect(markup).not.toContain('Retry full workflow');
+      if (checkpointStatus === 'paused') {
+        expect(markup).toContain('Continue agent');
+        expect(markup).toContain('Paused after a saved tool result');
+      } else expect(markup).not.toContain('Continue agent');
+    },
+  );
+  it('starts agent HTTP access empty and discloses fetched response sharing', () => {
+    authenticated();
+    const markup = render(
+      '/workflows/new',
+      <AgentConnectionPicker value={[]} disabled={false} onChange={() => {}} />,
+      (cache) =>
+        cache.setQueryData([user.id, 1, 'connections', 1], {
+          ...empty,
+          total: 1,
+          items: [
+            {
+              id,
+              name: 'Selected status',
+              endpoint_url: 'https://api.example.com/status',
+              revoked_at: null,
+            },
+          ],
+        }),
+    );
+    expect(markup.replaceAll('<!-- -->', '')).toContain('0 selected');
+    expect(markup).toContain('fetched JSON responses are sent to Groq');
+    expect(markup).toContain('Credentials stay on the server');
+    expect(markup).not.toContain('checked=""');
+  });
+  it('allows a missing or revoked agent connection selection to be removed', () => {
+    authenticated();
+    const markup = render(
+      '/workflows/new',
+      <AgentConnectionPicker value={[id]} disabled={false} onChange={() => {}} />,
+      (cache) => cache.setQueryData([user.id, 1, 'connections', 1], empty),
+    );
+    expect(markup).toContain(id);
+    expect(markup).toContain('Remove selection');
+    expect(markup).toContain('Missing or revoked selections must be removed');
+  });
   it('shows agent stop details and usage without offering full-workflow retry', () => {
     authenticated();
     const definition = starterDefinition();
@@ -94,7 +217,7 @@ describe('routed real API views', () => {
       '/executions/:executionId',
     );
     expect(markup.replaceAll('<!-- -->', '')).toContain('Agent stopped: iteration_limit');
-    expect(markup.replaceAll('<!-- -->', '')).toContain('Completed calculator calls: 1');
+    expect(markup.replaceAll('<!-- -->', '')).toContain('Completed tool calls: 1');
     expect(markup.replaceAll('<!-- -->', '')).toContain('total 6');
     expect(markup).not.toContain('Retry full workflow');
   });

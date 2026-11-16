@@ -39,27 +39,34 @@ to the proposed graph. Saving does not imply that an endpoint is reachable.
 The adapter makes one request to the configured Groq completion endpoint, with no
 automatic transport retry, redirect, environment proxy or paid provider fallback.
 It bounds prompt bytes (64 KiB), upstream response bytes (512 KiB), content size and
-the persisted output envelope (256 KiB). Network inactivity timeouts use the existing
-setting, and elapsed response-body reading is checked against its deadline. This
+the persisted output envelope (256 KiB). The connect timeout is capped at five seconds (or the smaller remaining request budget), while read/write/pool timeouts retain the configured provider budget. This leaves time for normal address fallback when an IPv6 route stalls. Elapsed response-body reading is checked against its deadline. This
 does not introduce a hard elapsed deadline for an entire workflow or interrupt an
 OS DNS lookup.
+
+Workflow generation and edit proposals have a 4,096-token completion budget because
+the provider returns a complete graph. Other JSON requests retain 2,048 tokens and
+ordinary text/agent calls retain 1,024. This is a ceiling, not a guarantee: large
+graphs or model reasoning can still exhaust the budget or account quota. Truncated
+responses are rejected without automatic retry. The planner explains that conditions
+output booleans, earlier fields need explicit input mappings, and numeric thresholds
+require numeric comparisons; proposals still require human review.
 
 Malformed/duplicate JSON, invalid usage counters, unexpected tool calls, credential
 echoes and truncated responses fail explicitly. Provider reasoning, request IDs,
 fingerprints and arbitrary upstream error bodies/headers are excluded. Responses
 report the actual response model separately from the requested model.
 
-| Outcome | Public API status/code |
-| --- | --- |
-| Missing key | 503 `PROVIDER_NOT_CONFIGURED` |
-| Invalid credentials/permissions | 503 `PROVIDER_AUTH_FAILED` |
+| Outcome                                | Public API status/code           |
+| -------------------------------------- | -------------------------------- |
+| Missing key                            | 503 `PROVIDER_NOT_CONFIGURED`    |
+| Invalid credentials/permissions        | 503 `PROVIDER_AUTH_FAILED`       |
 | Missing/decommissioned/forbidden model | 503 `PROVIDER_MODEL_UNAVAILABLE` |
-| Quota exhausted | 429 `PROVIDER_RATE_LIMITED` |
-| Context/input too large | 422 `PROVIDER_CONTEXT_LIMIT` |
-| Upstream outage | 503 `PROVIDER_UNAVAILABLE` |
-| Malformed response | 502 `PROVIDER_INVALID_RESPONSE` |
-| Output budget exhausted | 502 `PROVIDER_OUTPUT_LIMIT` |
-| Timeout | 504 `DEADLINE_EXCEEDED` |
+| Quota exhausted                        | 429 `PROVIDER_RATE_LIMITED`      |
+| Context/input too large                | 422 `PROVIDER_CONTEXT_LIMIT`     |
+| Upstream outage                        | 503 `PROVIDER_UNAVAILABLE`       |
+| Malformed response                     | 502 `PROVIDER_INVALID_RESPONSE`  |
+| Output budget exhausted                | 502 `PROVIDER_OUTPUT_LIMIT`      |
+| Timeout                                | 504 `DEADLINE_EXCEEDED`          |
 
 Provider authentication failures do not become AgentFlow 401s or end a valid user
 session. Rate limits propagate only validated `Retry-After` delta seconds, 1–86400;

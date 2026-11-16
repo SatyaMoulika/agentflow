@@ -1,5 +1,7 @@
 # Phase 8A — bounded calculator agent
 
+This note describes the calculator foundation. Phase 8B extends the same `agent` node, now displayed as **Tool Agent**, with explicitly authorized HTTP GET tools. See the [current HTTP agent guide and sample](http-agent.md); an omitted/empty `connection_ids` retains calculator-only behavior.
+
 ## Scope and request flow
 
 The registered `agent` node uses LangGraph only inside one deterministic workflow step. Groq can request the code-owned `calculator` function, consume its actual result and return a final text answer. Only the selected input field and configured instruction are sent; unrelated business input fields are excluded. Agent runs are explicit and synchronous even when background execution is enabled.
@@ -8,7 +10,7 @@ The outer execution service authorizes the owner and immutable saved workflow ve
 
 Files are owned by `app/modules/agents/` (`runner.py`, typed state, strict calculator arguments and metadata). The existing provider adapter supplies bounded, single-attempt Groq transport; deterministic nodes and the agent share bounded arithmetic in `executions/operations.py`. Registry/configuration lives in `workflows/`; execution persistence and API responses remain owned by `executions/`. The active editor and run details expose the new capability.
 
-LangGraph is a locked dependency (1.2.20 at this increment); LangSmith is also declared directly for the explicit tracing-disable context. Its transitive LangChain/LangSmith packages do not select a second model provider. Invocation explicitly disables implicit LangSmith tracing/export, including when host tracing environment variables are set. No checkpoint saver is configured. This increment adds no table or migration; head remains **0010**.
+LangGraph is a locked dependency; LangSmith is also declared directly for the explicit tracing-disable context. Its transitive LangChain/LangSmith packages do not select a second model provider. Invocation explicitly disables implicit LangSmith tracing/export, including when host tracing environment variables are set. Phase 8C adds a PostgreSQL checkpoint saver; see [checkpoint setup](agent-checkpoints.md).
 
 ## Bounds and failures
 
@@ -23,7 +25,7 @@ The model may answer without calling a tool and can misstate an answer even afte
 
 ## Try it
 
-Restart the updated API and frontend after locked dependency synchronization. In the editor add **Calculator Agent**, connect manual → agent → end, save and validate. The starter config selects `message` and allows three tool rounds. Equivalent definition:
+Restart the updated API and frontend after locked dependency synchronization. In the editor add **Tool Agent**, leave HTTP connections unselected, connect manual → agent → end, save and validate. The starter config selects `message` and allows three tool rounds. Equivalent definition:
 
 ```json
 {
@@ -56,7 +58,7 @@ Run explicitly with synthetic input:
 
 The existing configured Groq model/key must support local function calling and your account's limits. No new key or paid fallback is introduced. A successful business output contains `model`, `content` and `tool_calls`; each actual calculation records its call ID, operation, operands and numeric result. The run attempt's separate `agent` details show completed tool rounds and every validated provider call's reported usage/duration. Usage remains unknown where the provider did not report it.
 
-Failed attempts retain the stop reason, completed tool count and provider-call metadata in their immutable status event; failed attempt output remains null. Intermediate tool arguments/results are not durable checkpoints. Interrupted/cancelled calls may have unknown usage; crashes do not automatically resume or replay an agent. Retrying the same committed command key returns existing history without another model call. A fresh command can consume quota again.
+Failed attempts retain the stop reason, completed tool count and provider-call metadata in their immutable status event; failed attempt output remains null. Explicit post-tool pauses can be continued from durable checkpoints. Interrupted/cancelled calls may have unknown usage; crashes do not automatically resume or replay an agent. Retrying the same committed command key returns existing history without another model call. A fresh command can consume quota again.
 
 ## Verification and remaining work
 
@@ -64,7 +66,7 @@ Deterministic HTTP fixtures exercise the actual LangGraph loop: a consumed arith
 
 See [current verification results](../verification.md). No live model call was made for this increment. Browser discovery was retried and remains unavailable, so browser/visual acceptance is pending.
 
-Next: **8B**, an explicitly authorized HTTP agent tool, then **8C**, persistent checkpoint correlation/recovery. Approvals and external-effect reconciliation remain separate phases.
+Authorized HTTP agent tools are implemented; see the [sample review](http-agent.md). Phase 8C adds [explicit checkpoint continuation](agent-checkpoints.md). Approvals and external-effect reconciliation remain separate phases.
 
 References: [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), [Groq local function calling](https://console.groq.com/docs/tool-use/local-tool-calling).
 

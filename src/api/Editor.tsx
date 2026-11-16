@@ -13,7 +13,8 @@ import { Braces, Download, Play, Plus, Save, ShieldCheck } from 'lucide-react';
 import { Badge, Button, JsonViewer, Modal, PageHeader } from '../components/ui';
 import { api } from './client';
 import Canvas from './Canvas';
-import { ConnectionSelector, PlannerConnectionPicker } from './Connections';
+import { AgentConnectionPicker, ConnectionSelector, PlannerConnectionPicker } from './Connections';
+import { GmailConnectionSelector } from './GmailConnections';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import { Failure, Pending } from './common';
 import { summarizeProposal } from './proposalDiff';
@@ -406,6 +407,26 @@ function Designer({
             }
           />
         )}
+        {selectedNode.type === 'gmail_read' && (
+          <GmailConnectionSelector
+            value={
+              typeof selectedNode.config.connection_id === 'string'
+                ? selectedNode.config.connection_id
+                : ''
+            }
+            disabled={disabled || invalidJson}
+            onChange={(id) =>
+              edit({
+                ...definition,
+                nodes: definition.nodes.map((node) =>
+                  node.id === selectedNode.id
+                    ? { ...node, config: { ...node.config, connection_id: id } }
+                    : node,
+                ),
+              })
+            }
+          />
+        )}
         {selectedNode.type !== 'http' && (
           <JsonField
             label="Configuration (JSON)"
@@ -418,6 +439,51 @@ function Designer({
                 ...definition,
                 nodes: definition.nodes.map((n) =>
                   n.id === selectedNode.id ? { ...n, config: value } : n,
+                ),
+              })
+            }
+          />
+        )}
+        {selectedNode.type === 'agent' && (
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedNode.config.pause_after_tools === true}
+              disabled={disabled || invalidJson}
+              onChange={(event) =>
+                edit({
+                  ...definition,
+                  nodes: definition.nodes.map((node) =>
+                    node.id === selectedNode.id
+                      ? {
+                          ...node,
+                          config: { ...node.config, pause_after_tools: event.target.checked },
+                        }
+                      : node,
+                  ),
+                })
+              }
+            />{' '}
+            Pause after each tool. Save its result and continue explicitly from execution details.
+          </label>
+        )}
+        {selectedNode.type === 'agent' && (
+          <AgentConnectionPicker
+            value={
+              Array.isArray(selectedNode.config.connection_ids)
+                ? selectedNode.config.connection_ids.filter(
+                    (id): id is string => typeof id === 'string',
+                  )
+                : []
+            }
+            disabled={disabled || invalidJson}
+            onChange={(ids) =>
+              edit({
+                ...definition,
+                nodes: definition.nodes.map((node) =>
+                  node.id === selectedNode.id
+                    ? { ...node, config: { ...node.config, connection_ids: ids } }
+                    : node,
                 ),
               })
             }
@@ -842,9 +908,11 @@ function Designer({
         )}
         {definition.nodes.some((node) => node.type === 'agent') && (
           <p className="api-notice">
-            Calculator agents may make several Groq requests within their tool limit. They run
-            synchronously, with no automatic retry or recovery. Review their answer and tool
-            results.
+            Agents may make several Groq requests within their tool limit. Selected HTTP connections
+            allow fetched JSON responses to be sent to Groq and stored in execution history. They
+            run synchronously, with no automatic retry. Optional pauses retain tool results for
+            explicit continuation; unknown in-flight calls cannot be resumed automatically. Review
+            their answer and tool results.
           </p>
         )}
         {definition.nodes.some((node) => node.type === 'http') && (

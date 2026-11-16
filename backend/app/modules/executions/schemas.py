@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from app.modules.agents.schemas import AgentMetadata
+from app.modules.agents.schemas import AgentCheckpointResponse, AgentMetadata
 from app.modules.executions.payloads import InvalidExecutionPayloadError, copy_payload
 from app.modules.executions.provider_schemas import ProviderMetadata
 from app.modules.executions.state import EventType, FailureCode, NodeStatus, RunStatus
@@ -72,6 +72,7 @@ class NodeAttemptResponse(HistoryResponse):
     retry: RetryScheduleResponse | None = None
     provider: ProviderMetadata | None = None
     agent: AgentMetadata | None = None
+    checkpoint: AgentCheckpointResponse | None = None
 
 
 class RunSummary(HistoryResponse):

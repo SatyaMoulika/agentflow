@@ -83,6 +83,62 @@ def test_missing_usage_stays_unknown(monkeypatch) -> None:
     assert "usage" not in result["metadata"] and "cost" not in result["metadata"]
 
 
+def test_workflow_proposal_gets_a_larger_bounded_budget_without_retries(monkeypatch) -> None:
+    calls = transport(monkeypatch, lambda request: httpx.Response(200, json=payload()))
+    provider.complete(settings(), "synthetic proposal", json_mode=True, workflow_proposal=True)
+    assert len(calls) == 1
+    request = json.loads(calls[0].content)
+    assert request["max_completion_tokens"] == 4096
+    assert request["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.parametrize("budget", [1, 45])
+def test_connection_setup_cannot_consume_the_entire_response_budget(monkeypatch, budget) -> None:
+    original = httpx.Client
+    calls = []
+    clock = [0.0]
+    monkeypatch.setattr(provider, "monotonic", lambda: clock[0])
+
+    def client(**kwargs):
+        timeout = httpx.Timeout(kwargs["timeout"])
+        assert timeout.read == budget and timeout.write == budget and timeout.pool == budget
+        connect_timeout = timeout.connect
+        assert connect_timeout is not None and 0 < connect_timeout <= budget
+
+        def handle(request):
+            calls.append(request)
+            if budget == 45:
+                # Simulate an unreachable first address spending its connect timeout,
+                # followed by a reachable address returning a response immediately.
+                # The former 45-second connect timeout exhausted the total deadline here.
+                clock[0] += connect_timeout + 0.25
+            return httpx.Response(200, json=payload())
+
+        return original(transport=httpx.MockTransport(handle), **kwargs)
+
+    monkeypatch.setattr(provider.httpx, "Client", client)
+    configured = settings().model_copy(update={"groq_timeout_seconds": budget})
+    assert provider.complete(configured, "synthetic input")["content"] == "Synthetic answer"
+    assert len(calls) == 1
+
+
+def test_agent_remaining_budget_also_caps_connection_setup(monkeypatch) -> None:
+    original = httpx.Client
+
+    def client(**kwargs):
+        assert kwargs["timeout"].connect == kwargs["timeout"].read == 0.25
+        return original(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload())),
+            **kwargs,
+        )
+
+    monkeypatch.setattr(provider.httpx, "Client", client)
+    result = provider.complete_tools(
+        settings(), [{"role": "user", "content": "synthetic input"}], [], timeout_seconds=0.25
+    )
+    assert result["content"] == "Synthetic answer"
+
+
 @pytest.mark.parametrize(
     ("status", "body", "code", "expected"),
     [
@@ -147,8 +203,11 @@ def test_malformed_model_content_and_usage_fail_closed(monkeypatch, body) -> Non
     assert KEY not in json.dumps(error.value.metadata)
 
 
-def test_truncated_response_preserves_reported_usage_but_is_not_accepted(monkeypatch) -> None:
-    transport(
+@pytest.mark.parametrize("workflow_proposal", [False, True])
+def test_truncated_response_preserves_reported_usage_but_is_not_accepted(
+    monkeypatch, workflow_proposal
+) -> None:
+    calls = transport(
         monkeypatch,
         lambda request: httpx.Response(
             200,
@@ -158,8 +217,9 @@ def test_truncated_response_preserves_reported_usage_but_is_not_accepted(monkeyp
         ),
     )
     with pytest.raises(provider.GroqError) as error:
-        provider.complete(settings(), "synthetic")
+        provider.complete(settings(), "synthetic", workflow_proposal=workflow_proposal)
     assert error.value.code == "PROVIDER_OUTPUT_LIMIT"
+    assert len(calls) == 1
     assert error.value.metadata is not None
     assert error.value.metadata["usage"]["total_tokens"] == 7
 

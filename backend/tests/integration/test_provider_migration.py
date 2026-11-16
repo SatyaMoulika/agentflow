@@ -116,7 +116,7 @@ def test_provider_upgrade_preserves_history_and_refuses_a_lossy_downgrade(
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0009")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
     assert connection.scalar(text("SELECT count(*) FROM execution_events")) == count
     assert (
         connection.scalar(
