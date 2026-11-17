@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.modules.executions.dispatch_models import WorkflowDispatch
 from app.modules.outbox.models import OutboxMessage
 
 
@@ -15,6 +16,7 @@ class ClaimedMessage:
     id: UUID
     lease_token: UUID
     kind: str = "transport_probe"
+    traceparent: str | None = None
 
 
 class OutboxRepository:
@@ -64,7 +66,14 @@ class OutboxRepository:
                 select(func.clock_timestamp() + timedelta(seconds=lease_seconds))
             )
             row.attempts += 1
-            claimed.append(ClaimedMessage(row.id, token, row.kind))
+            dispatch = (
+                self.session.get(WorkflowDispatch, row.workflow_run_id)
+                if row.workflow_run_id
+                else None
+            )
+            claimed.append(
+                ClaimedMessage(row.id, token, row.kind, dispatch.traceparent if dispatch else None)
+            )
         self.session.flush()
         return claimed
 

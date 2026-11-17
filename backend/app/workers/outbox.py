@@ -8,6 +8,7 @@ from threading import Event
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import ConfigurationError, load_settings
+from app.core.tracing import configure_local_export, shutdown_export
 from app.infrastructure.database.session import Database
 from app.modules.executions.dispatch import schedule_recovery
 from app.modules.outbox.dispatcher import OutboxDispatcher
@@ -29,6 +30,7 @@ def main(*, workflow_database: Database | None = None) -> int:
         parser.error("interval must be between 0.1 and 30 seconds")
     try:
         settings = load_settings()
+        configure_local_export(settings.trace_export_enabled)
         if settings.database_url is None and workflow_database is None:
             print("Set AGENTFLOW_DATABASE_URL before using the outbox.", file=sys.stderr)
             return 2
@@ -97,4 +99,7 @@ def main(*, workflow_database: Database | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    finally:
+        shutdown_export()

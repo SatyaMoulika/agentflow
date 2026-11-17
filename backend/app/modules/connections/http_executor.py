@@ -139,7 +139,11 @@ def get_json(
     except ValueError:
         raise _target_blocked() from None
     secret = connection.secret.get_secret_value() if connection.secret is not None else None
-    headers = {"Accept": "application/json", "Accept-Encoding": "identity"}
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "identity",
+        "User-Agent": "AgentFlow/0.1",
+    }
     if connection.auth_type == "bearer" and secret:
         headers["Authorization"] = f"Bearer {secret}"
     elif connection.auth_type == "api_key" and secret:

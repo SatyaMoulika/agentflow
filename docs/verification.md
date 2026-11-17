@@ -1,5 +1,13 @@
 # Verification
 
+## Background tracing — 17 November 2026
+
+The full backend checker passed **1,395 tests** with guarded PostgreSQL and Redis. Afterward, a focused **13-test** PostgreSQL/tracing run verified persisted context, worker propagation, immutable trace history and guarded downgrade. Following final exporter header filtering, the ordinary backend checker passed **949 tests**, Ruff lint/format and Pyright, with **448 opt-in integration cases skipped**. The exporter test uses a simulated collector to inspect serialized OTLP spans and confirms environment headers are removed. No live Phoenix collector, separate-process trace acceptance or browser test was performed. The existing test services were left running; the development database was not migrated.
+
+## GitHub HTTP compatibility — 16 November 2026
+
+The HTTP executor now sends the fixed application header `User-Agent: AgentFlow/0.1`, required by GitHub's REST API. The standard backend checker passed **944 tests**, Ruff lint/format and Pyright, with **446 opt-in integrations skipped**. One unauthenticated request to GitHub's public `octocat/Hello-World` repository passed through the controlled executor without credentials, database writes or response-payload output. No frontend or schema change was made, so frontend and full database/Redis integration checks were not repeated. Authenticated private-repository reads and browser acceptance remain pending. See the [setup and limits](learning-notes/github-read-connection.md).
+
 ## Tool agents and Gmail connection snapshot — 16 November 2026
 
 The complete backend checker passed **1,390 tests** with guarded disposable PostgreSQL and Redis, Ruff lint/format and Pyright. Frontend verification passed **146 tests**, ESLint, TypeScript and the production build. The initial backend run identified an outdated node-catalog assertion; adding the implemented `gmail_read` type made the complete rerun pass. The saved-node container check in the Gmail AI-edit guard was also narrowed explicitly to resolve four Pyright errors.

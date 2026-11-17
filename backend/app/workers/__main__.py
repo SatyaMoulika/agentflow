@@ -4,6 +4,7 @@ import sys
 
 from app.core.config import ConfigurationError, load_settings
 from app.core.logging import configure_logging
+from app.core.tracing import configure_local_export, shutdown_export
 from app.infrastructure.database.session import Database
 from app.workers.celery_app import WorkerConfigurationError, create_celery
 
@@ -16,6 +17,7 @@ def main(*, workflow_database: Database | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     configure_logging(settings.log_level)
+    configure_local_export(settings.trace_export_enabled)
     try:
         # Celery's CLI wrapper does not reliably return the worker's exit code
         # to its Python caller. Read it from the controller for supervisors.
@@ -31,6 +33,7 @@ def main(*, workflow_database: Database | None = None) -> int:
         code = worker.exitcode
     finally:
         app.close()
+        shutdown_export()
     return code if isinstance(code, int) else 0
 
 

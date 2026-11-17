@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, func, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
@@ -24,6 +24,7 @@ class WorkflowDispatch(Base):
         ForeignKey("workflow_runs.id", ondelete="RESTRICT"), primary_key=True
     )
     dispatch_count: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    traceparent: Mapped[str | None] = mapped_column(String(55))
     retry_base_seconds: Mapped[int] = mapped_column(Integer, server_default=text("5"))
     retry_max_seconds: Mapped[int] = mapped_column(Integer, server_default=text("60"))
     next_dispatch_at: Mapped[datetime] = mapped_column(

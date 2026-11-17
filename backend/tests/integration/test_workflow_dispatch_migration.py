@@ -3,6 +3,8 @@
 import pytest
 from alembic import command
 from alembic.config import Config
+from opentelemetry import context
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, set_span_in_context
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
@@ -115,5 +117,29 @@ def test_dispatch_target_pending_uniqueness_and_retained_history_guards(
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0006")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
     assert connection.scalar(text("SELECT count(*) FROM workflow_dispatches")) == 1
+
+
+def test_trace_context_is_immutable_and_downgrade_preserves_history(
+    migration_environment: tuple[Connection, Config],
+) -> None:
+    connection, config = migration_environment
+    command.upgrade(config, "head")
+    _, _, _, run_id, _ = seed(connection)
+    active = SpanContext(trace_id=123, span_id=456, is_remote=False, trace_flags=TraceFlags(1))
+    token = context.attach(set_span_in_context(NonRecordingSpan(active)))
+    try:
+        with Session(connection) as session, session.begin():
+            enqueue_run(session, run_id)
+    finally:
+        context.detach(token)
+    assert connection.scalar(text("SELECT traceparent FROM workflow_dispatches")) is not None
+    connection.commit()
+    with pytest.raises(IntegrityError):
+        connection.execute(text("UPDATE workflow_dispatches SET traceparent=NULL"))
+    connection.rollback()
+    with pytest.raises(IntegrityError):
+        command.downgrade(config, "0012")
+    connection.rollback()
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"

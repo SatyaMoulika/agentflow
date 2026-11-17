@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     debug: bool = False
     docs_enabled: bool = True
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    trace_export_enabled: bool = False
     database_url: SecretStr | None = None
     redis_url: SecretStr | None = None
     groq_api_key: SecretStr | None = Field(default=None, validation_alias="GROQ_API_KEY")

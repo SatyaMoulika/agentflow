@@ -211,6 +211,7 @@ def test_actual_http_stack_pins_dns_preserves_tls_hostname_and_sends_only_fixed_
     request = b"".join(record["requests"])
     assert request.startswith(b"GET /status HTTP/1.1")
     assert b"Host: api.example.com" in request
+    assert b"User-Agent: AgentFlow/0.1\r\n" in request
     assert b"Authorization: Bearer private-credential" in request
     assert "private-credential" not in json.dumps(output)
 

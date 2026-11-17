@@ -58,6 +58,7 @@ known metadata/platform endpoints are blocked. Redirects, URL credentials, query
 strings, fragments, Unix sockets and environment proxies are unavailable.
 
 Requests use fixed Accept headers and the selected authentication header; they send
+the fixed `User-Agent: AgentFlow/0.1` application header for API compatibility and
 no workflow input, arbitrary headers or cookies. Only 2xx JSON responses are accepted,
 with a 64 KiB limit. Compression, duplicate keys, nonfinite numbers, excessive nesting
 and decoded strings/keys containing the usable credential fail without persistence.

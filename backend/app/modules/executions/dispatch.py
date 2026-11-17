@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.tracing import capture_traceparent, traced
 from app.infrastructure.database.models import RunClaim, WorkflowRun
 from app.infrastructure.database.session import Database
 from app.modules.executions.dispatch_models import WorkflowDispatch
@@ -29,6 +30,7 @@ def enqueue_run(
     session.add(
         WorkflowDispatch(
             run_id=run_id,
+            traceparent=capture_traceparent(),
             next_dispatch_at=now + timedelta(seconds=redelivery_seconds),
             retry_base_seconds=retry_base_seconds,
             retry_max_seconds=retry_max_seconds,
@@ -38,6 +40,7 @@ def enqueue_run(
     OutboxRepository(session).enqueue_workflow(run_id)
 
 
+@traced("agentflow.recovery_discovery")
 def schedule_recovery(database: Database, *, limit: int = 20, redelivery_seconds: int = 30) -> int:
     """Rediscover only worker-owned unfinished runs without a live lease/pending intent.
 

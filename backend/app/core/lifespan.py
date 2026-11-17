@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import configure_logging
+from app.core.tracing import configure_local_export, shutdown_export
 from app.infrastructure.database.session import Database
 
 logger = logging.getLogger("agentflow.lifecycle")
@@ -18,6 +19,7 @@ logger = logging.getLogger("agentflow.lifecycle")
 async def application_lifespan(application: FastAPI) -> AsyncIterator[None]:
     """Own the optional PostgreSQL pool; blocking operations run off the event loop."""
     configure_logging(application.state.settings.log_level)
+    configure_local_export(application.state.settings.trace_export_enabled)
     database: Database | None = None
     application.state.database = None
     try:
@@ -40,6 +42,7 @@ async def application_lifespan(application: FastAPI) -> AsyncIterator[None]:
         if database is not None:
             await run_in_threadpool(database.dispose)
         application.state.database = None
+        shutdown_export()
         logger.info(
             "Application shutdown",
             extra={"environment": application.state.settings.environment},

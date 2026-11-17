@@ -16,6 +16,8 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from opentelemetry import context, trace
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, set_span_in_context
 from pydantic import SecretStr
 from redis import Redis
 from sqlalchemy import event, func, select
@@ -117,6 +119,44 @@ def due(database: Database, run_id: UUID) -> None:
         delivery = session.get(WorkflowDispatch, run_id)
         assert delivery is not None
         delivery.next_dispatch_at -= timedelta(hours=1)
+
+
+def test_background_trace_context_survives_storage_and_reaches_worker(
+    repository_database: Database, prepared, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = SpanContext(trace_id=123, span_id=456, is_remote=False, trace_flags=TraceFlags(1))
+    token = context.attach(set_span_in_context(NonRecordingSpan(original)))
+    try:
+        run = queued(repository_database, prepared)
+    finally:
+        context.detach(token)
+    with repository_database.session() as session:
+        saved = session.get(WorkflowDispatch, run.id)
+        assert saved is not None and saved.traceparent is not None
+    seen = []
+    messages = []
+    original_run = worker_runner.PureWorkerRunner.run
+
+    def record_worker(self, *args, **kwargs):
+        seen.append(trace.get_current_span().get_span_context().trace_id)
+        return original_run(self, *args, **kwargs)
+
+    monkeypatch.setattr(worker_runner.PureWorkerRunner, "run", record_worker)
+
+    def publish(message_id):
+        seen.append(trace.get_current_span().get_span_context().trace_id)
+        messages.append(message_id)
+
+    result = OutboxDispatcher(
+        repository_database, lambda _: None, publish_workflow=publish
+    ).dispatch_once()
+    assert result.published == 1 and seen == [123]
+    consume_workflow(repository_database, str(messages[0]))
+    assert seen == [123, 123]
+    with repository_database.session() as session:
+        completed = session.get(WorkflowRun, run.id)
+        assert completed is not None and completed.status == RunStatus.SUCCEEDED
+    assert not trace.get_current_span().get_span_context().is_valid
 
 
 async def test_api_returns_202_without_node_or_broker_calls_and_replay_preserves_mode(

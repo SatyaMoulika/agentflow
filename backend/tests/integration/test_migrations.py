@@ -40,7 +40,7 @@ def test_upgrade_downgrade_reupgrade_and_metadata_drift(
         "gmail_authorizations",
         "gmail_connections",
     }
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
     connection.commit()
     command.check(config)
     connection.commit()
