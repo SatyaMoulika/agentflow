@@ -1,3 +1,5 @@
+import { WorkflowJourney, WorkflowReadiness } from './WorkflowJourney';
+import { NodeConfiguration } from './NodeConfiguration';
 import { date } from './format';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +54,13 @@ function JsonField<T>({
 }) {
   const [text, setText] = useState(() => JSON.stringify(value, null, 2));
   const [error, setError] = useState('');
+  const serialized = JSON.stringify(value);
+  const [observed, setObserved] = useState(serialized);
+  if (observed !== serialized) {
+    setObserved(serialized);
+    setText(JSON.stringify(value, null, 2));
+    setError('');
+  }
   return (
     <label className="api-json-field">
       <span className="label">{label}</span>
@@ -67,6 +76,7 @@ function JsonField<T>({
           setText(next);
           try {
             const parsed = parse(next);
+            setObserved(JSON.stringify(parsed));
             setError('');
             onValidity(true);
             onValue(parsed);
@@ -261,6 +271,9 @@ function Designer({
       const signature = JSON.stringify([saved.current_version_id, payload, maxAttempts]);
       if (pendingRun.current?.signature !== signature)
         pendingRun.current = { signature, key: crypto.randomUUID() };
+      const checked = await api.validate(saved.id, definition);
+      setReport(checked);
+      if (!checked.execution_ready) throw new Error('Fix the validation issues before running.');
       const result = await api.run(
         saved.id,
         saved.current_version_id,
@@ -429,13 +442,21 @@ function Designer({
           />
         )}
         {selectedNode.type !== 'http' && (
-          <JsonField
-            label="Configuration (JSON)"
-            value={selectedNode.config}
-            parse={parseObject}
+          <NodeConfiguration
+            key={selectedNode.id}
+            node={selectedNode}
             disabled={disabled}
-            onValidity={validity('config')}
-            onValue={(value) =>
+            renderJson={(value, onValue) => (
+              <JsonField
+                label="Configuration (JSON)"
+                value={value}
+                parse={parseObject}
+                disabled={disabled}
+                onValidity={validity('config')}
+                onValue={onValue}
+              />
+            )}
+            onChange={(value) =>
               edit({
                 ...definition,
                 nodes: definition.nodes.map((n) =>
@@ -570,6 +591,8 @@ function Designer({
           </>
         }
       />
+      <WorkflowJourney stage="configure" />
+      <WorkflowReadiness definition={definition} saved={!dirty} validation={report} />
       {readOnly && (
         <p className="api-notice">
           {saved.status === 'archived'

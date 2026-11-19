@@ -15,3 +15,11 @@ No backend, authentication/session logic, API client, workflow definitions, exec
 - Backend/integration suites were not run because no backend or protocol behaviour was changed.
 
 Pull the merged branch and use the existing frontend setup (`npm ci`, then `npm run dev`) to see the theme. No migration, re-index, environment change or new credential is required.
+
+## Guided workflow journey
+
+The create screen starts with an explicit choice: an opt-in starter draft, a Groq-generated proposal, or a blank manual workflow. Starter drafts are created only after the user clicks Create; they are not account fixtures and do not execute automatically. The calculator starter needs no external provider. GitHub briefing requires a currently active, eligible repository issues/pulls connection selected from the owner's paginated connections; execution uses the existing bounded Tool Agent and Groq, with read-only and partial-collection disclosures.
+
+The editor shows a journey indicator and a setup checklist. Common model/parser nodes expose instruction and input-key fields, with full JSON available for additional settings. Basic edits preserve other configuration keys. Workflow input metadata remains frontend guidance, not a backend-enforced input schema.
+
+Both run entry points request server graph validation before submitting an execution, retaining the existing idempotency-key behavior. This check makes no provider call and does not prove provider availability, connection authorization or output quality; runtime checks remain authoritative. There is no new test mode, scheduler, webhook, write connector or approval mechanism. Existing agent tool checkpoints remain available.
