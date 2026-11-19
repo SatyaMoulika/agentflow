@@ -1242,3 +1242,62 @@
 .integrations-grid .api-panel h3 {
   margin: 0;
 }
+
+.execution-fields {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.execution-fields > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 3fr);
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+}
+.execution-fields dt {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.execution-fields dd {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.execution-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.execution-failures {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.execution-failures li {
+  border-left: 3px solid var(--danger, #ad425f);
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+.execution-failures small {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.api-attempt:target {
+  outline: 2px solid #7957bd;
+  outline-offset: 4px;
+}
+@media (max-width: 600px) {
+  .execution-fields > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+.api-shell .card.execution-failures a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

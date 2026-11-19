@@ -25,3 +25,9 @@ The editor shows a journey indicator and a setup checklist. Common model/parser 
 Both run entry points request server graph validation before submitting an execution, retaining the existing idempotency-key behavior. This check makes no provider call and does not prove provider availability, connection authorization or output quality; runtime checks remain authoritative. There is no new test mode, scheduler, webhook, write connector or approval mechanism. Existing agent tool checkpoints remain available.
 
 The Integrations screen uses compact, two-column setup cards above a separate “Manage & revoke connections” section for HTTP/GitHub revocation and Gmail disconnection. Cards stack below 800px; the existing owner-scoped API calls, pagination and cache invalidation are retained.
+
+## Execution results
+
+Execution details now places the final result above the graph and event history. Stored model responses retain Markdown rendering with raw output available on demand. Structured results show exact field names and scalar values; nested values and complete JSON remain expandable. Only succeeded executions present output as a completed result.
+
+Failures provide guidance for the backend's existing failure codes, identify the latest failed attempt for each step and link to its expanded details. Earlier failures superseded by a successful attempt are not shown as current failures. Paused agent steps open automatically so continuation is visible. Input and stored output remain available in an expandable section, and existing provider-call, checkpoint, cancellation and retry safeguards remain in place. Gmail reads now also suppress the unsupported full-workflow retry action.
