@@ -26,6 +26,7 @@ import {
   Unavailable,
 } from './api/pages';
 import Editor from './api/Editor';
+import RunWorkflow, { RunWorkflowList } from './api/RunWorkflow';
 import { GmailCallback } from './api/GmailConnections';
 import './api/workspace.css';
 const queryClient = new QueryClient({
@@ -106,6 +107,8 @@ const router = createBrowserRouter(
           <Route path="workflows/new" element={<CreateWorkflow />} />
           <Route path="workflows/:workflowId" element={<Editor />} />
           <Route path="workflows/:workflowId/edit" element={<Editor />} />
+          <Route path="workflows/:workflowId/run" element={<RunWorkflow />} />
+          <Route path="run" element={<RunWorkflowList />} />
           <Route path="executions" element={<RunList />} />
           <Route path="executions/:executionId" element={<RunView />} />
           <Route path="settings" element={<Account />} />

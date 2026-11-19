@@ -12,6 +12,8 @@ import { useScope, useSession } from './session';
 import Canvas from './Canvas';
 import HttpConnections, { PlannerConnectionPicker } from './Connections';
 import GmailConnections from './GmailConnections';
+import GitHubConnections from './GitHubConnections';
+import { RunOutput } from './RunOutput';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import type {
   ExecutionEvent,
@@ -198,6 +200,11 @@ export function WorkflowList() {
                   <Button asChild>
                     <Link to={`/workflows/${item.id}/edit`}>Open editor</Link>
                   </Button>
+                  {item.status !== 'archived' && item.current_version_id && (
+                    <Button asChild>
+                      <Link to={`/workflows/${item.id}/run`}>Run</Link>
+                    </Button>
+                  )}
                   <Link to={`/executions?workflow_id=${item.id}`}>Runs</Link>
                   {item.status !== 'archived' && (
                     <Button
@@ -876,11 +883,11 @@ export function RunView() {
         </section>
         <section className="card api-panel">
           <h2>Run output</h2>
-          {data.output === null ? (
-            <p className="muted">No successful output stored.</p>
-          ) : (
-            <JsonViewer data={data.output} />
-          )}
+          <RunOutput
+            output={data.output}
+            attempts={data.node_runs}
+            nodes={data.version.definition.nodes}
+          />
         </section>
       </div>
       <section className="card api-panel">
@@ -1028,6 +1035,7 @@ export function Integrations() {
     <div className="api-page">
       <PageHeader title="Integrations" description="Manage connections and test Groq." />
       <GmailConnections />
+      <GitHubConnections />
       <HttpConnections />
       <form className="card api-panel api-form" onSubmit={submit}>
         <h2>Groq</h2>

@@ -14,6 +14,8 @@ import HttpConnections, {
 } from '../src/api/Connections';
 import { ProviderDetails } from '../src/api/ProviderDetails';
 import GmailConnections, { GmailConnectionSelector } from '../src/api/GmailConnections';
+import GitHubConnections from '../src/api/GitHubConnections';
+import { RunForm } from '../src/api/RunWorkflow';
 const user = {
   id: '12345678-1234-1234-1234-123456789abc',
   email: 'actual@example.com',
@@ -42,6 +44,50 @@ function authenticated() {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('routed real API views', () => {
+  it('shows saved workflow input fields on the run page', () => {
+    authenticated();
+    const definition = starterDefinition();
+    definition.metadata = {
+      agentflow_input_fields: [
+        { name: 'message', label: 'Review request', type: 'text', required: true },
+      ],
+    };
+    const markup = render(
+      `/workflows/${id}/run`,
+      <RunForm
+        workflow={{
+          id,
+          owner_id: user.id,
+          name: 'Review PRs',
+          description: '',
+          status: 'draft',
+          current_version_id: id,
+          current_version_number: 1,
+          created_at: '',
+          updated_at: '',
+          version: {
+            id,
+            workflow_id: id,
+            version_number: 1,
+            definition,
+            created_at: '',
+            created_by: user.id,
+          },
+        }}
+      />,
+    );
+    expect(markup).toContain('Run Review PRs');
+    expect(markup).toContain('Review request');
+    expect(markup).toContain('Run saved version');
+  });
+  it('offers GitHub repository reads and clearly describes the scope', () => {
+    authenticated();
+    const markup = render('/integrations', <GitHubConnections />);
+    expect(markup).toContain('Repository owner');
+    expect(markup).toContain('Repository name');
+    expect(markup).toContain('Create GitHub connection');
+    expect(markup).toContain('No automatic triggers or GitHub writes');
+  });
   it('shows connected Gmail state without claiming mailbox automation is available', () => {
     authenticated();
     const markup = render('/integrations', <GmailConnections />, (cache) =>

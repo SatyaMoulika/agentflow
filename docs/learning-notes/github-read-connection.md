@@ -1,6 +1,6 @@
 # Read GitHub through an HTTP connection
 
-Use AgentFlow's existing **Integrations → HTTP connections** to authorize a fixed GitHub REST endpoint. This supports manually started read workflows. A native GitHub connection screen, webhook/scheduled triggers and GitHub write actions are not implemented.
+Use **Integrations → GitHub** to create a read-only connection to one repository's issues or pull requests. It uses the existing owner-bound HTTP connections and HTTP GET node, and supports manually started workflows. Webhook/scheduled triggers and GitHub write actions are not implemented.
 
 ## Create a token for local use
 
@@ -16,7 +16,9 @@ For organization-wide or long-lived integrations, a GitHub App is a later option
 
 1. Keep the existing `AGENTFLOW_CONNECTION_ENCRYPTION_KEY` in private `backend/.env`. Restart the API if that key was added after the API started. Do not generate a replacement for an existing key.
 2. When the API runs on port **8001**, start Vite from the project root with `AGENTFLOW_API_PROXY_TARGET=http://127.0.0.1:8001 npm run dev`. Open `http://localhost:5173` and sign in.
-3. Open **Integrations → HTTP connections** and enter:
+3. Open **Integrations → GitHub** and enter the repository owner, name and whether to read issues or pull requests. For a private repository, paste the fine-grained token into the credential field. Select **Create GitHub connection**. Public repositories can be read without a token. This stores an HTTP connection and does not yet contact GitHub.
+
+   Alternatively, **Integrations → HTTP connections** supports other fixed GitHub endpoints such as repository metadata:
 
    | Field          | Value                                     |
    | -------------- | ----------------------------------------- |
@@ -28,7 +30,7 @@ For organization-wide or long-lived integrations, a GitHub App is a later option
    Replace `OWNER/REPO` with the exact selected repository, for example `SatyaMoulika/agentflow`. Create the connection. This stores the encrypted credential; it does not yet call GitHub.
 
 4. Create `Manual Trigger → HTTP GET → End`. On HTTP GET, select the connection. Save, validate, and run with `{}`.
-5. Inspect the actual result: `status_code` should be `200`, and `body` should contain the repository metadata. This verifies the selected endpoint, not every future GitHub capability.
+5. Inspect the actual result: `status_code` should be `200`, and `body` should contain the selected GitHub data. This verifies the selected endpoint, not every future GitHub capability.
 
 To read issues or pull requests, create separate fixed connections ending in `/issues` or `/pulls`, with the matching read permissions. The issues endpoint can include pull requests; entries with a `pull_request` key represent PRs. See [GitHub's issues API](https://docs.github.com/en/rest/issues/issues).
 

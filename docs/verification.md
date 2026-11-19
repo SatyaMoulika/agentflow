@@ -1,5 +1,21 @@
 # Verification
 
+## Saved workflow run forms — 19 November 2026
+
+The run section lists saved workflows and opens the current saved version with user-defined text, number and boolean input fields. Definitions are stored inside existing version metadata. Direct manual-to-tool input fields can be suggested; missing or malformed metadata retains the advanced JSON path. Tests cover suggestions, typed inputs, defaults, key preservation, malformed definitions and the rendered run form. The form is client-side guidance rather than an API validation policy. Browser acceptance remains pending because the browser access host was unavailable.
+
+## Execution output presentation — 19 November 2026
+
+Execution details render a successful Groq or Tool Agent result as Markdown when the stored run output matches that node's actual output. The full stored JSON remains available in a collapsed disclosure; other business JSON remains in its original viewer. Rendering ignores raw HTML and remote images, and filters unsafe links. The approvals navigation icon is distinct from integrations. Frontend checks passed **152 tests**, ESLint and the production build. Tests cover Markdown output, raw data access, ordinary business JSON and unsafe content. Browser visual acceptance was unavailable because the browser access host could not be reached.
+
+## Agent HTTP response bound — 19 November 2026
+
+Raised the per-result agent HTTP bound from 16 KiB to 32 KiB while retaining the 60,000-byte conversation limit. A live unauthenticated read of the reported public GitHub pull-request endpoint returned 17,119 bytes, exceeding the former bound; the controlled executor then fetched it successfully with the new limit. No credentials, payload output or database writes were used. Backend tests passed **950** with **448 opt-in integration tests skipped**; Ruff lint, Pyright and formatting of the changed Python files passed. The standard checker stopped at Ruff formatting because of a pre-existing whitespace change in migration 0013, which was preserved. The automated agent test verifies a medium result reaches the provider and an oversized result is rejected. No live Groq or browser end-to-end run was performed.
+
+## GitHub connection form — 18 November 2026
+
+The active Integrations page now offers a GitHub form that creates owner-scoped existing HTTP connections for a repository's issues or pull requests. Frontend checks passed **149 tests**, ESLint, TypeScript and the production build. Tests cover safe endpoint construction and the rendered connection form. No backend, database or migration change was made. Browser acceptance was unavailable because the browser access host could not be reached; no authenticated live GitHub request was made. Collection size and pagination limitations remain as described in the [GitHub guide](learning-notes/github-read-connection.md).
+
 ## Background tracing — 17 November 2026
 
 The full backend checker passed **1,395 tests** with guarded PostgreSQL and Redis. Afterward, a focused **13-test** PostgreSQL/tracing run verified persisted context, worker propagation, immutable trace history and guarded downgrade. Following final exporter header filtering, the ordinary backend checker passed **949 tests**, Ruff lint/format and Pyright, with **448 opt-in integration cases skipped**. The exporter test uses a simulated collector to inspect serialized OTLP spans and confirms environment headers are removed. No live Phoenix collector, separate-process trace acceptance or browser test was performed. The existing test services were left running; the development database was not migrated.

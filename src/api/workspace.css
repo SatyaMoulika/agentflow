@@ -133,6 +133,27 @@
 .api-form .label {
   margin-bottom: 0;
 }
+.api-input-definition {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.api-input-definition label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.api-input-definition label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
 .api-pagination {
   display: flex;
   justify-content: space-between;
@@ -465,6 +486,129 @@
 .api-panel .json-viewer pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.api-output {
+  min-width: 0;
+}
+.api-output-label {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.api-markdown {
+  color: var(--text);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.api-markdown > :first-child {
+  margin-top: 0;
+}
+.api-markdown > :last-child {
+  margin-bottom: 0;
+}
+.api-panel .api-markdown h1,
+.api-panel .api-markdown h2,
+.api-panel .api-markdown h3,
+.api-panel .api-markdown h4 {
+  margin: 1.25em 0 0.5em;
+  line-height: 1.35;
+  font-weight: 650;
+}
+.api-panel .api-markdown h1 {
+  font-size: 1.35rem;
+}
+.api-panel .api-markdown h2 {
+  font-size: 1.2rem;
+}
+.api-panel .api-markdown h3,
+.api-panel .api-markdown h4 {
+  font-size: 1rem;
+}
+.api-markdown p,
+.api-markdown ul,
+.api-markdown ol,
+.api-markdown pre,
+.api-markdown blockquote,
+.api-markdown table {
+  margin: 0 0 1em;
+}
+.api-markdown ul,
+.api-markdown ol {
+  padding-left: 1.5em;
+}
+.api-markdown ul {
+  list-style: disc;
+}
+.api-markdown ol {
+  list-style: decimal;
+}
+.api-markdown li + li {
+  margin-top: 0.3em;
+}
+.api-markdown a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.api-markdown blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 1em;
+  color: var(--muted);
+}
+.api-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 14px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.api-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.api-markdown :not(pre) > code {
+  padding: 0.1em 0.3em;
+  background: var(--surface-secondary);
+  border-radius: 4px;
+}
+.api-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.api-markdown th,
+.api-markdown td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.api-markdown th {
+  background: var(--surface-secondary);
+}
+.api-markdown input[type='checkbox'] {
+  margin-right: 0.4em;
+}
+.api-output-raw {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.api-output-raw summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.api-output-raw summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }
 .api-inspector .json-viewer pre {
   font-size: 10px;

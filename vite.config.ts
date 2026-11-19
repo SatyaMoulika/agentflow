@@ -21,6 +21,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'workflow-canvas': ['@xyflow/react'],
+          'markdown-vendor': ['react-markdown', 'remark-gfm'],
           charts: ['recharts'],
         },
       },

@@ -13,7 +13,7 @@ from app.modules.connections.service import ConnectionNotFoundError, ConnectionS
 from app.modules.executions.operations import NodeExecutionError
 from app.modules.executions.state import FailureCode
 
-MAX_AGENT_HTTP_BYTES = 16384
+MAX_AGENT_HTTP_BYTES = 32768
 
 
 class AgentHttpTools:

@@ -335,9 +335,17 @@ def test_http_result_cannot_trigger_fetch_of_unselected_endpoint(monkeypatch):
     )
 
 
+def test_medium_http_result_reaches_provider(monkeypatch):
+    calls = install(monkeypatch, [http(), None])
+    tools = HttpTools(result={"status_code": 200, "body": {"text": "x" * 18000}})
+    output, _ = execute(tools)
+    assert output["tool_calls"][0]["body"]["text"] == "x" * 18000
+    assert len(calls) == 2
+
+
 def test_oversized_tool_result_never_reaches_provider(monkeypatch):
     calls = install(monkeypatch, [http()])
-    tools = HttpTools(result={"status_code": 200, "body": {"text": "x" * 16384}})
+    tools = HttpTools(result={"status_code": 200, "body": {"text": "x" * 32768}})
     with pytest.raises(AgentExecutionError) as error:
         execute(tools)
     assert error.value.metadata["failure_reason"] == "tool_result_too_large" and len(calls) == 1

@@ -15,6 +15,7 @@ import { api } from './client';
 import Canvas from './Canvas';
 import { AgentConnectionPicker, ConnectionSelector, PlannerConnectionPicker } from './Connections';
 import { GmailConnectionSelector } from './GmailConnections';
+import { InputFieldsEditor } from './InputFieldsEditor';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import { Failure, Pending } from './common';
 import { summarizeProposal } from './proposalDiff';
@@ -561,6 +562,11 @@ function Designer({
               <Save size={15} />
               Save
             </Button>
+            {!readOnly && saved.current_version_id && !dirty && (
+              <Button asChild>
+                <Link to={`/workflows/${saved.id}/run`}>Run workflow</Link>
+              </Button>
+            )}
           </>
         }
       />
@@ -884,6 +890,15 @@ function Designer({
             <p>Additional issues were omitted. Resolve these and validate again.</p>
           )}
         </section>
+      )}
+      {!source && (
+        <InputFieldsEditor
+          key={`${saved.version?.id || 'new'}:${epoch}`}
+          definition={definition}
+          disabled={disabled}
+          onChange={edit}
+          onValidity={validity('inputFields')}
+        />
       )}
       <section className="card api-panel">
         <div className="api-section">

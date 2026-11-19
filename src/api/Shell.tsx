@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { Activity, House, Layers3, LogOut, Menu, Settings, Workflow, X } from 'lucide-react';
+import {
+  Activity,
+  ClipboardCheck,
+  House,
+  Layers3,
+  LogOut,
+  Menu,
+  Play,
+  Settings,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { Button, UserAvatar } from '../components/ui';
 import { client } from './client';
 import { Failure } from './common';
@@ -9,9 +20,10 @@ import '../layouts/shell.css';
 const links = [
   ['/dashboard', 'Overview', House],
   ['/workflows', 'Workflows', Workflow],
+  ['/run', 'Run workflow', Play],
   ['/executions', 'Executions', Activity],
   ['/integrations', 'Integrations', Layers3],
-  ['/approvals', 'Approvals', Layers3],
+  ['/approvals', 'Approvals', ClipboardCheck],
   ['/settings', 'Account', Settings],
 ] as const;
 export default function Shell() {
