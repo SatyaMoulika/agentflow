@@ -5,6 +5,7 @@ import { api } from './client';
 import { Failure, Pages, Pending } from './common';
 import { useScope } from './session';
 import type { ConnectionAuth } from './types';
+import { IntegrationHeading } from './IntegrationHeading';
 
 export default function HttpConnections() {
   const scope = useScope();
@@ -61,7 +62,7 @@ export default function HttpConnections() {
   }
   return (
     <section className="card api-panel api-form">
-      <h2>HTTP connections</h2>
+      <IntegrationHeading service="http" />
       <p>
         Authorize one fixed public HTTPS endpoint per connection. HTTP GET nodes and selected agent
         tools retrieve JSON when you run a workflow. Workflow input is not sent to endpoints. Agent

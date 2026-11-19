@@ -12,6 +12,38 @@
   font-size: 17px;
   margin-bottom: 12px;
 }
+.integration-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.api-panel .integration-heading h2 {
+  margin: 0;
+}
+.integration-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  color: var(--text);
+}
+.integration-icon svg {
+  width: 23px;
+  height: 23px;
+}
+.integration-icon--gmail {
+  color: #d93025;
+}
+.integration-icon--groq {
+  color: var(--primary);
+}
+.integration-icon--http {
+  color: var(--primary);
+}
 .api-panel h3 {
   font-size: 14px;
   margin-bottom: 8px;

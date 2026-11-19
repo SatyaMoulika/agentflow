@@ -16,6 +16,7 @@ import { ProviderDetails } from '../src/api/ProviderDetails';
 import GmailConnections, { GmailConnectionSelector } from '../src/api/GmailConnections';
 import GitHubConnections from '../src/api/GitHubConnections';
 import { RunForm } from '../src/api/RunWorkflow';
+import { IntegrationHeading } from '../src/api/IntegrationHeading';
 const user = {
   id: '12345678-1234-1234-1234-123456789abc',
   email: 'actual@example.com',
@@ -44,6 +45,17 @@ function authenticated() {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('routed real API views', () => {
+  it.each(['gmail', 'github', 'groq', 'http'] as const)(
+    'shows a decorative service icon with a readable heading for %s',
+    (service) => {
+      const markup = render('/integrations', <IntegrationHeading service={service} />);
+      expect(markup).toContain('aria-hidden="true"');
+      expect(markup).toContain('<svg');
+      expect(markup).toContain(
+        `<h2>${{ gmail: 'Gmail', github: 'GitHub', groq: 'Groq', http: 'HTTP connections' }[service]}</h2>`,
+      );
+    },
+  );
   it('shows saved workflow input fields on the run page', () => {
     authenticated();
     const definition = starterDefinition();

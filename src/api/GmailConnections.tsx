@@ -6,6 +6,7 @@ import { api } from './client';
 import { Failure, Pending } from './common';
 import { useScope } from './session';
 import { captureGmailCallback } from './gmailCallback';
+import { IntegrationHeading } from './IntegrationHeading';
 
 // Remove the OAuth code from the URL before rendering and hold it only in memory.
 // StrictMode and re-renders share one promise, so a callback is submitted at most once.
@@ -97,7 +98,7 @@ export default function GmailConnections() {
   }
   return (
     <section className="card api-panel api-form">
-      <h2>Gmail</h2>
+      <IntegrationHeading service="gmail" />
       <p>
         Connect with Google to grant read-only Gmail access. You can manually select a recent inbox
         message for a workflow. Automatic triggers and sending are still being built.

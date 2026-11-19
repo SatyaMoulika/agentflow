@@ -15,6 +15,7 @@ import HttpConnections, { PlannerConnectionPicker } from './Connections';
 import GmailConnections from './GmailConnections';
 import GitHubConnections from './GitHubConnections';
 import { RunOutput } from './RunOutput';
+import { IntegrationHeading } from './IntegrationHeading';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import type {
   ExecutionEvent,
@@ -1054,7 +1055,7 @@ export function Integrations() {
       <GitHubConnections />
       <HttpConnections />
       <form className="card api-panel api-form" onSubmit={submit}>
-        <h2>Groq</h2>
+        <IntegrationHeading service="groq" />
         <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
         <label className="label" htmlFor="groq-prompt">
           Prompt

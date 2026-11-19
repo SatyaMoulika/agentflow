@@ -4,6 +4,7 @@ import { Button } from '../components/ui';
 import { api } from './client';
 import { Failure } from './common';
 import { githubEndpoint } from './github';
+import { IntegrationHeading } from './IntegrationHeading';
 import { useScope } from './session';
 
 export default function GitHubConnections() {
@@ -43,7 +44,7 @@ export default function GitHubConnections() {
 
   return (
     <section className="card api-panel api-form">
-      <h2>GitHub</h2>
+      <IntegrationHeading service="github" />
       <p>
         Read a repository’s issues or pull requests in a manually started workflow. Create one
         connection for each list; GitHub credentials are encrypted on the server.
