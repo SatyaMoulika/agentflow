@@ -1094,3 +1094,60 @@
     white-space: nowrap;
   }
 }
+
+.workflow-journey ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px 0;
+  margin: 0;
+  list-style: none;
+}
+.workflow-journey li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground, #686477);
+  font-size: 13px;
+}
+.workflow-journey li span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ded5ef;
+  border-radius: 50%;
+}
+.workflow-journey li[aria-current='step'] {
+  color: #7957bd;
+  font-weight: 700;
+}
+.workflow-journey li[aria-current='step'] span {
+  background: #eee7fa;
+  border-color: #7957bd;
+}
+.workflow-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.workflow-readiness ul {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.workflow-readiness h2 {
+  font-size: 17px;
+}
+.workflow-readiness p {
+  font-size: 13px;
+}
+[hidden] {
+  display: none !important;
+}
+.workflow-starters .button {
+  white-space: normal;
+  max-width: 100%;
+  height: auto;
+  min-height: 40px;
+  text-align: left;
+}
