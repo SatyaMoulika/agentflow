@@ -49,7 +49,11 @@ export function GmailCallback() {
   );
 }
 
-export default function GmailConnections() {
+export default function GmailConnections({
+  view = 'all',
+}: {
+  view?: 'all' | 'connect' | 'manage';
+}) {
   const scope = useScope();
   const cache = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -58,6 +62,7 @@ export default function GmailConnections() {
   const rows = useQuery({
     queryKey: [...scope, 'gmail-connections'],
     queryFn: ({ signal }) => api.gmailConnections(signal),
+    enabled: view !== 'connect',
   });
   async function connect() {
     setPending(true);
@@ -97,58 +102,73 @@ export default function GmailConnections() {
     }
   }
   return (
-    <section className="card api-panel api-form">
-      <IntegrationHeading service="gmail" />
-      <p>
-        Connect with Google to grant read-only Gmail access. You can manually select a recent inbox
-        message for a workflow. Automatic triggers and sending are still being built.
-      </p>
-      <Button type="button" disabled={pending} onClick={() => void connect()}>
-        Connect Gmail
-      </Button>
-      {error ? <Failure error={error} /> : null}
-      {rows.isPending ? (
-        <Pending />
-      ) : rows.isError ? (
-        <Failure error={rows.error} />
-      ) : (
-        rows.data.map((row) => (
-          <div key={row.id}>
-            <code>{row.id}</code> · {row.revoked_at ? 'Disconnected' : 'Connected'}{' '}
-            {!row.revoked_at && (
-              <Button disabled={pending} onClick={() => void listMessages(row.id)}>
-                Show recent message IDs
-              </Button>
-            )}{' '}
-            {!row.revoked_at && (
-              <Button disabled={pending} onClick={() => void revoke(row.id)}>
-                Disconnect
-              </Button>
-            )}
-            {messages?.connectionId === row.id && !row.revoked_at && (
-              <div>
-                <p>
-                  Enter a message ID in your workflow's manual input as <code>message_id</code>.
-                </p>
-                {messages.ids.length ? (
-                  messages.ids.map((id) => (
-                    <p key={id}>
-                      <code>{id}</code>
-                    </p>
-                  ))
-                ) : (
-                  <p>No inbox messages returned.</p>
-                )}
-              </div>
-            )}
-          </div>
-        ))
+    <>
+      {view !== 'manage' && (
+        <section className="card api-panel api-form">
+          <IntegrationHeading service="gmail" />
+          <p>
+            Connect with Google to grant read-only Gmail access. You can manually select a recent
+            inbox message for a workflow. Automatic triggers and sending are still being built.
+          </p>
+          <Button type="button" disabled={pending} onClick={() => void connect()}>
+            Connect Gmail
+          </Button>
+          {error ? <Failure error={error} /> : null}
+        </section>
       )}
-      <p className="muted">
-        Disconnect removes the stored credential from AgentFlow. Google account permissions can also
-        be reviewed in Google account settings.
-      </p>
-    </section>
+      {view !== 'connect' && (
+        <section className="card api-panel api-form" aria-label="Manage Gmail connections">
+          <h3>Gmail connections</h3>
+          {view === 'manage' && error ? <Failure error={error} /> : null}
+          {rows.isPending ? (
+            <Pending />
+          ) : rows.isError ? (
+            <Failure error={rows.error} />
+          ) : (
+            <>
+              {rows.data.length === 0 && <p>No Gmail connections yet.</p>}
+              {rows.data.map((row) => (
+                <div className="integration-connection" key={row.id}>
+                  <code>{row.id}</code>
+                  <span className="muted">{row.revoked_at ? 'Disconnected' : 'Connected'}</span>
+                  {!row.revoked_at && (
+                    <Button disabled={pending} onClick={() => void listMessages(row.id)}>
+                      Show recent message IDs
+                    </Button>
+                  )}
+                  {!row.revoked_at && (
+                    <Button disabled={pending} onClick={() => void revoke(row.id)}>
+                      Disconnect
+                    </Button>
+                  )}
+                  {messages?.connectionId === row.id && !row.revoked_at && (
+                    <div>
+                      <p>
+                        Enter a message ID in your workflow's manual input as{' '}
+                        <code>message_id</code>.
+                      </p>
+                      {messages.ids.length ? (
+                        messages.ids.map((id) => (
+                          <p key={id}>
+                            <code>{id}</code>
+                          </p>
+                        ))
+                      ) : (
+                        <p>No inbox messages returned.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+          <p className="muted">
+            Disconnect removes the stored credential from AgentFlow. Google account permissions can
+            also be reviewed in Google account settings.
+          </p>
+        </section>
+      )}
+    </>
   );
 }
 

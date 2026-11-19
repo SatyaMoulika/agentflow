@@ -7,7 +7,7 @@ import { useScope } from './session';
 import type { ConnectionAuth } from './types';
 import { IntegrationHeading } from './IntegrationHeading';
 
-export default function HttpConnections() {
+export default function HttpConnections({ view = 'all' }: { view?: 'all' | 'connect' | 'manage' }) {
   const scope = useScope();
   const cache = useQueryClient();
   const [page, setPage] = useState(1);
@@ -21,6 +21,7 @@ export default function HttpConnections() {
   const connections = useQuery({
     queryKey: [...scope, 'connections', page],
     queryFn: ({ signal }) => api.connections(page, signal),
+    enabled: view !== 'connect',
   });
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -61,123 +62,145 @@ export default function HttpConnections() {
     }
   }
   return (
-    <section className="card api-panel api-form">
-      <IntegrationHeading service="http" />
-      <p>
-        Authorize one fixed public HTTPS endpoint per connection. HTTP GET nodes and selected agent
-        tools retrieve JSON when you run a workflow. Workflow input is not sent to endpoints. Agent
-        HTTP results are sent to Groq and stored in execution history.
-      </p>
-      <form className="api-form" onSubmit={(event) => void create(event)}>
-        <label className="label" htmlFor="connection-name">
-          Name
-        </label>
-        <input
-          id="connection-name"
-          className="input"
-          required
-          maxLength={100}
-          value={name}
-          disabled={!!pending}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <label className="label" htmlFor="connection-endpoint">
-          HTTPS endpoint
-        </label>
-        <input
-          id="connection-endpoint"
-          className="input"
-          type="url"
-          required
-          maxLength={1000}
-          placeholder="https://api.example.com/status"
-          value={endpoint}
-          disabled={!!pending}
-          onChange={(event) => setEndpoint(event.target.value)}
-        />
-        <p className="muted">
-          Port 443 only. Redirects, private networks, URL credentials and query strings are blocked.
-        </p>
-        <label className="label" htmlFor="connection-auth">
-          Authentication
-        </label>
-        <select
-          id="connection-auth"
-          className="input"
-          value={auth}
-          disabled={!!pending}
-          onChange={(event) => {
-            setAuth(event.target.value as ConnectionAuth);
-            setSecret('');
-          }}
-        >
-          <option value="none">None</option>
-          <option value="bearer">Bearer token</option>
-          <option value="api_key">X-API-Key</option>
-        </select>
-        {auth !== 'none' && (
-          <>
-            <label className="label" htmlFor="connection-secret">
-              Credential
+    <>
+      {view !== 'manage' && (
+        <section className="card api-panel api-form">
+          <IntegrationHeading service="http" />
+          <p>
+            Authorize one fixed public HTTPS endpoint per connection. HTTP GET nodes and selected
+            agent tools retrieve JSON when you run a workflow. Workflow input is not sent to
+            endpoints. Agent HTTP results are sent to Groq and stored in execution history.
+          </p>
+          <form className="api-form" onSubmit={(event) => void create(event)}>
+            <label className="label" htmlFor="connection-name">
+              Name
             </label>
             <input
-              id="connection-secret"
+              id="connection-name"
               className="input"
-              type="password"
-              autoComplete="new-password"
               required
-              minLength={8}
-              maxLength={4096}
-              value={secret}
+              maxLength={100}
+              value={name}
               disabled={!!pending}
-              onChange={(event) => setSecret(event.target.value)}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <label className="label" htmlFor="connection-endpoint">
+              HTTPS endpoint
+            </label>
+            <input
+              id="connection-endpoint"
+              className="input"
+              type="url"
+              required
+              maxLength={1000}
+              placeholder="https://api.example.com/status"
+              value={endpoint}
+              disabled={!!pending}
+              onChange={(event) => setEndpoint(event.target.value)}
             />
             <p className="muted">
-              Credentials are encrypted on the server and never returned. Server encryption must be
-              configured.
+              Port 443 only. Redirects, private networks, URL credentials and query strings are
+              blocked.
             </p>
-          </>
-        )}
-        <Button type="submit" variant="primary" disabled={!!pending}>
-          {pending === 'create' ? 'Saving…' : 'Create connection'}
-        </Button>
-      </form>
-      {error ? <Failure error={error} /> : null}
-      {notice && (
-        <p className="api-notice" role="status">
-          {notice}
-        </p>
+            <label className="label" htmlFor="connection-auth">
+              Authentication
+            </label>
+            <select
+              id="connection-auth"
+              className="input"
+              value={auth}
+              disabled={!!pending}
+              onChange={(event) => {
+                setAuth(event.target.value as ConnectionAuth);
+                setSecret('');
+              }}
+            >
+              <option value="none">None</option>
+              <option value="bearer">Bearer token</option>
+              <option value="api_key">X-API-Key</option>
+            </select>
+            {auth !== 'none' && (
+              <>
+                <label className="label" htmlFor="connection-secret">
+                  Credential
+                </label>
+                <input
+                  id="connection-secret"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  maxLength={4096}
+                  value={secret}
+                  disabled={!!pending}
+                  onChange={(event) => setSecret(event.target.value)}
+                />
+                <p className="muted">
+                  Credentials are encrypted on the server and never returned. Server encryption must
+                  be configured.
+                </p>
+              </>
+            )}
+            <Button type="submit" variant="primary" disabled={!!pending}>
+              {pending === 'create' ? 'Saving…' : 'Create connection'}
+            </Button>
+          </form>
+          {error ? <Failure error={error} /> : null}
+          {notice && (
+            <p className="api-notice" role="status">
+              {notice}
+            </p>
+          )}
+        </section>
       )}
-      <h3>Your connections</h3>
-      {connections.isPending ? (
-        <Pending />
-      ) : connections.isError ? (
-        <Failure error={connections.error} retry={() => void connections.refetch()} />
-      ) : (
-        <>
-          {connections.data.items.length === 0 && <p>No HTTP connections yet.</p>}
-          {connections.data.items.map((row) => (
-            <div className="card api-panel" key={row.id}>
-              <strong>{row.name}</strong>
-              <p>{row.endpoint_url}</p>
-              <p className="muted">
-                {row.auth_type} · {row.revoked_at ? 'Revoked' : 'Active'}
-              </p>
-              <code>{row.id}</code>
-              {!row.revoked_at && (
-                <Button variant="danger" disabled={!!pending} onClick={() => void revoke(row.id)}>
-                  Revoke connection
-                </Button>
-              )}
-            </div>
-          ))}
-          <Pages page={page} total={connections.data.total} size={20} onChange={setPage} />
-        </>
+      {view !== 'connect' && (
+        <section
+          className="card api-panel api-form"
+          aria-label="Manage HTTP and GitHub connections"
+        >
+          <h3>HTTP &amp; GitHub connections</h3>
+          {view === 'manage' && error ? <Failure error={error} /> : null}
+          {view === 'manage' && notice && (
+            <p className="api-notice" role="status">
+              {notice}
+            </p>
+          )}
+          {connections.isPending ? (
+            <Pending />
+          ) : connections.isError ? (
+            <Failure error={connections.error} retry={() => void connections.refetch()} />
+          ) : (
+            <>
+              {connections.data.items.length === 0 && <p>No HTTP connections yet.</p>}
+              {connections.data.items.map((row) => (
+                <div className="integration-connection" key={row.id}>
+                  <strong>{row.name}</strong>
+                  <p>{row.endpoint_url}</p>
+                  <p className="muted">
+                    {row.auth_type} · {row.revoked_at ? 'Revoked' : 'Active'}
+                  </p>
+                  <code>{row.id}</code>
+                  {!row.revoked_at && (
+                    <Button
+                      variant="danger"
+                      disabled={!!pending}
+                      onClick={() => void revoke(row.id)}
+                    >
+                      Revoke connection
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Pages page={page} total={connections.data.total} size={20} onChange={setPage} />
+            </>
+          )}
+          <p className="muted">
+            Revocation blocks future calls. A request already in progress may finish.
+          </p>
+        </section>
       )}
-      <p className="muted">
-        Revocation blocks future calls. A request already in progress may finish.
-      </p>
-    </section>
+    </>
   );
 }
 

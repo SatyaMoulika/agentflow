@@ -1,3 +1,4 @@
+import { WorkflowJourney, WorkflowReadiness } from './WorkflowJourney';
 import { useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -127,6 +128,11 @@ export function RunForm({ workflow }: { workflow: WorkflowDetail }) {
       const signature = JSON.stringify([workflow.version.id, input, attempts]);
       if (pendingRun.current?.signature !== signature)
         pendingRun.current = { signature, key: crypto.randomUUID() };
+      const checked = await api.validate(workflow.id, workflow.version.definition);
+      if (!checked.execution_ready)
+        throw new Error(
+          'This workflow is not ready to run. Open the editor and validate it to review the issues.',
+        );
       const result = await api.run(
         workflow.id,
         workflow.version.id,
@@ -154,6 +160,8 @@ export function RunForm({ workflow }: { workflow: WorkflowDetail }) {
           </Button>
         }
       />
+      <WorkflowJourney stage="run" />
+      {definition && <WorkflowReadiness definition={definition} />}
       {!workflow.version || workflow.status === 'archived' ? (
         <p className="api-notice">Save an active workflow definition before running it.</p>
       ) : (

@@ -1,3 +1,5 @@
+import { StarterChooser } from './StarterChooser';
+import { WorkflowJourney } from './WorkflowJourney';
 import { date, elapsed } from './format';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -57,8 +59,8 @@ export function Dashboard() {
             <span>Bring the idea to life.</span>
           </h2>
           <p>Design a flow, follow its branches, and see the story behind each execution.</p>
-          <Link to="/workflows" className="api-studio-link">
-            Explore your workflows <ArrowRight size={15} />
+          <Link to="/workflows/new" className="api-studio-link">
+            Choose a starting workflow <ArrowRight size={15} />
           </Link>
         </div>
         <FlowIllustration compact />
@@ -249,6 +251,7 @@ export function WorkflowList() {
   );
 }
 export function CreateWorkflow() {
+  const [mode, setMode] = useState<'starter' | 'ai' | 'blank'>('starter');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
@@ -306,148 +309,176 @@ export function CreateWorkflow() {
     <div className="api-page">
       <PageHeader
         title="Create workflow"
-        description="Describe what you need, or start with a manual workflow."
+        description="Choose a starting point, configure it, then run with your own input."
       />
-      <form className="card api-panel api-form" onSubmit={generateProposal}>
-        <h2>Generate with AI</h2>
-        <p>
-          Your request is sent to Groq and may be sent once more if the proposal fails validation.
-          Review the proposal before saving.
-        </p>
-        <label className="label" htmlFor="workflow-prompt">
-          What should the workflow do?
-        </label>
-        <textarea
-          id="workflow-prompt"
-          className="input"
-          rows={4}
-          maxLength={2000}
-          required
-          value={prompt}
-          disabled={generating || busy}
-          onChange={(event) => {
-            setPrompt(event.target.value);
-            setProposal(null);
-          }}
-          placeholder="Create a workflow that drafts a response to a customer support message."
-        />
-        <PlannerConnectionPicker
-          value={connectionIds}
-          disabled={generating || busy}
-          onChange={(ids) => {
-            setConnectionIds(ids);
-            setProposal(null);
-          }}
-        />
-        <Button
-          type="submit"
-          variant="primary"
-          loading={generating}
-          disabled={generating || busy || !prompt.trim()}
-        >
-          Generate proposal
-        </Button>
-        {generationError !== null && <Failure error={generationError} />}
-      </form>
-      {proposal && (
-        <section className="card api-panel api-form" aria-live="polite">
-          <h2>
-            {proposal.status === 'ready' ? 'Review proposal' : 'Cannot generate this workflow yet'}
-          </h2>
-          <p>{proposal.message}</p>
-          <ConnectionReview connections={proposal.connections} />
-          {proposal.provider_calls?.map((metadata, index) => (
-            <ProviderDetails key={index} metadata={metadata} />
-          ))}
-          {proposal.status === 'ready' && proposal.definition && (
-            <>
-              <h3>{proposal.name}</h3>
-              <p>{proposal.description}</p>
-              <p>
-                Review the steps and check that they match your request. Validation checks graph
-                structure; it does not guarantee the proposal meets your intent.
-              </p>
-              <ul>
-                {proposal.definition.nodes.map((node) => (
-                  <li key={node.id}>
-                    {node.label || node.id} — {node.type}
-                  </li>
-                ))}
-              </ul>
-              <h3>Connections</h3>
-              <ul>
-                {proposal.definition.edges.map((edge) => (
-                  <li key={edge.id}>
-                    {edge.source} → {edge.target} ({edge.source_handle || 'default'})
-                  </li>
-                ))}
-              </ul>
-              <details>
-                <summary>Proposed definition</summary>
-                <JsonViewer data={proposal.definition} />
-              </details>
-              <details>
-                <summary>Suggested test input</summary>
-                <JsonViewer data={proposal.sample_input} />
-              </details>
-              <p className="muted">
-                Suggested input is not run automatically. Save it if you want to use it later.
-              </p>
-              <Button
-                type="button"
-                variant="primary"
-                loading={busy}
-                disabled={busy || generating}
-                onClick={() => void saveProposal()}
-              >
-                Create from proposal
-              </Button>
-            </>
-          )}
-          <small className="muted">
-            Generated with {proposal.model}
-            {proposal.repair_attempted ? ' after one regeneration' : ''}. No workflow has been saved
-            yet.
-          </small>
-        </section>
-      )}
-      <form className="card api-panel api-form" onSubmit={submit}>
-        <h2>Create manually</h2>
-        <label className="label" htmlFor="workflow-name">
-          Workflow name
-        </label>
-        <input
-          id="workflow-name"
-          className="input"
-          required
-          maxLength={200}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={busy}
-        />
-        <label className="label" htmlFor="workflow-description">
-          Description
-        </label>
-        <textarea
-          id="workflow-description"
-          className="input"
-          rows={3}
-          maxLength={5000}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={busy}
-        />
-        <p className="muted">This creates a saved draft in your account.</p>
-        {error !== null && <Failure error={error} />}
-        <div className="api-actions">
-          <Button asChild>
-            <Link to="/workflows">Back</Link>
+      <WorkflowJourney stage="choose" />
+      <div className="workflow-starters" role="group" aria-label="Starting point">
+        {(['starter', 'ai', 'blank'] as const).map((choice) => (
+          <Button
+            key={choice}
+            disabled={busy || generating}
+            variant={mode === choice ? 'primary' : 'secondary'}
+            aria-pressed={mode === choice}
+            onClick={() => {
+              setMode(choice);
+              setProposal(null);
+            }}
+          >
+            {
+              { starter: 'Use a guided starter', ai: 'Generate with AI', blank: 'Start blank' }[
+                choice
+              ]
+            }
           </Button>
-          <Button type="submit" variant="primary" loading={busy} disabled={busy || !name.trim()}>
-            Create workflow
+        ))}
+      </div>
+      {mode === 'starter' && <StarterChooser onBusyChange={setBusy} />}
+      <section hidden={mode !== 'ai'}>
+        <form className="card api-panel api-form" onSubmit={generateProposal}>
+          <h2>Generate with AI</h2>
+          <p>
+            Your request is sent to Groq and may be sent once more if the proposal fails validation.
+            Review the proposal before saving.
+          </p>
+          <label className="label" htmlFor="workflow-prompt">
+            What should the workflow do?
+          </label>
+          <textarea
+            id="workflow-prompt"
+            className="input"
+            rows={4}
+            maxLength={2000}
+            required
+            value={prompt}
+            disabled={generating || busy}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              setProposal(null);
+            }}
+            placeholder="Create a workflow that drafts a response to a customer support message."
+          />
+          <PlannerConnectionPicker
+            value={connectionIds}
+            disabled={generating || busy}
+            onChange={(ids) => {
+              setConnectionIds(ids);
+              setProposal(null);
+            }}
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            loading={generating}
+            disabled={generating || busy || !prompt.trim()}
+          >
+            Generate proposal
           </Button>
-        </div>
-      </form>
+          {generationError !== null && <Failure error={generationError} />}
+        </form>
+        {proposal && (
+          <section className="card api-panel api-form" aria-live="polite">
+            <h2>
+              {proposal.status === 'ready'
+                ? 'Review proposal'
+                : 'Cannot generate this workflow yet'}
+            </h2>
+            <p>{proposal.message}</p>
+            <ConnectionReview connections={proposal.connections} />
+            {proposal.provider_calls?.map((metadata, index) => (
+              <ProviderDetails key={index} metadata={metadata} />
+            ))}
+            {proposal.status === 'ready' && proposal.definition && (
+              <>
+                <h3>{proposal.name}</h3>
+                <p>{proposal.description}</p>
+                <p>
+                  Review the steps and check that they match your request. Validation checks graph
+                  structure; it does not guarantee the proposal meets your intent.
+                </p>
+                <ul>
+                  {proposal.definition.nodes.map((node) => (
+                    <li key={node.id}>
+                      {node.label || node.id} — {node.type}
+                    </li>
+                  ))}
+                </ul>
+                <h3>Connections</h3>
+                <ul>
+                  {proposal.definition.edges.map((edge) => (
+                    <li key={edge.id}>
+                      {edge.source} → {edge.target} ({edge.source_handle || 'default'})
+                    </li>
+                  ))}
+                </ul>
+                <details>
+                  <summary>Proposed definition</summary>
+                  <JsonViewer data={proposal.definition} />
+                </details>
+                <details>
+                  <summary>Suggested test input</summary>
+                  <JsonViewer data={proposal.sample_input} />
+                </details>
+                <p className="muted">
+                  Suggested input is not run automatically. Save it if you want to use it later.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  loading={busy}
+                  disabled={busy || generating}
+                  onClick={() => void saveProposal()}
+                >
+                  Create from proposal
+                </Button>
+              </>
+            )}
+            <small className="muted">
+              Generated with {proposal.model}
+              {proposal.repair_attempted ? ' after one regeneration' : ''}. No workflow has been
+              saved yet.
+            </small>
+          </section>
+        )}
+      </section>
+      <section hidden={mode !== 'blank'}>
+        <form className="card api-panel api-form" onSubmit={submit}>
+          <h2>Create manually</h2>
+          <label className="label" htmlFor="workflow-name">
+            Workflow name
+          </label>
+          <input
+            id="workflow-name"
+            className="input"
+            required
+            maxLength={200}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={busy}
+          />
+          <label className="label" htmlFor="workflow-description">
+            Description
+          </label>
+          <textarea
+            id="workflow-description"
+            className="input"
+            rows={3}
+            maxLength={5000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            disabled={busy}
+          />
+          <p className="muted">This creates a saved draft in your account.</p>
+          {error !== null && <Failure error={error} />}
+          <div className="api-actions">
+            <Button asChild>
+              <Link to="/workflows">Back</Link>
+            </Button>
+            <Button type="submit" variant="primary" loading={busy} disabled={busy || !name.trim()}>
+              Create workflow
+            </Button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -803,6 +834,7 @@ export function RunView() {
     }
   return (
     <div className="api-page">
+      <WorkflowJourney stage="results" />
       <PageHeader
         title="Execution details"
         description={data.id}
@@ -1014,7 +1046,7 @@ export function Unavailable({ kind }: { kind: string }) {
       <PageHeader title={kind} />
       <EmptyState
         title={`${kind} are not available yet`}
-        description="This feature’s backend module is still pending. Your workspace contains no simulated records or connections."
+        description="This feature’s backend module is still pending. Your account contains no simulated records or connections."
         action={
           <Button asChild>
             <Link to="/workflows">Open workflows</Link>
@@ -1051,40 +1083,50 @@ export function Integrations() {
   return (
     <div className="api-page">
       <PageHeader title="Integrations" description="Manage connections and test Groq." />
-      <GmailConnections />
-      <GitHubConnections />
-      <HttpConnections />
-      <form className="card api-panel api-form" onSubmit={submit}>
-        <IntegrationHeading service="groq" />
-        <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
-        <label className="label" htmlFor="groq-prompt">
-          Prompt
-        </label>
-        <textarea
-          id="groq-prompt"
-          className="input"
-          rows={5}
-          maxLength={4000}
-          required
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-        />
-        <Button type="submit" variant="primary" disabled={pending || !prompt.trim()}>
-          {pending ? 'Sending…' : 'Send to Groq'}
-        </Button>
-        {error ? <Failure error={error} /> : null}
-        {result && (
-          <section>
-            <h3>Response from {result.model}</h3>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{result.content}</p>
-            <ProviderDetails metadata={result.metadata} />
-          </section>
-        )}
-        <p className="muted">
-          This test does not run a workflow. Add a Groq LLM node in the workflow editor to use Groq
-          during a run.
-        </p>
-      </form>
+      <div className="integrations-grid" aria-label="Connect services">
+        <GitHubConnections />
+        <HttpConnections view="connect" />
+        <GmailConnections view="connect" />
+        <form className="card api-panel api-form" onSubmit={submit}>
+          <IntegrationHeading service="groq" />
+          <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
+          <label className="label" htmlFor="groq-prompt">
+            Prompt
+          </label>
+          <textarea
+            id="groq-prompt"
+            className="input"
+            rows={5}
+            maxLength={4000}
+            required
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+          <Button type="submit" variant="primary" disabled={pending || !prompt.trim()}>
+            {pending ? 'Sending…' : 'Send to Groq'}
+          </Button>
+          {error ? <Failure error={error} /> : null}
+          {result && (
+            <section>
+              <h3>Response from {result.model}</h3>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{result.content}</p>
+              <ProviderDetails metadata={result.metadata} />
+            </section>
+          )}
+          <p className="muted">
+            This test does not run a workflow. Add a Groq LLM node in the workflow editor to use
+            Groq during a run.
+          </p>
+        </form>
+      </div>
+      <section className="integration-management" aria-labelledby="manage-connections-title">
+        <h2 id="manage-connections-title">Manage &amp; revoke connections</h2>
+        <p className="muted">Review existing connections and remove access you no longer need.</p>
+        <div className="integrations-grid">
+          <HttpConnections view="manage" />
+          <GmailConnections view="manage" />
+        </div>
+      </section>
     </div>
   );
 }

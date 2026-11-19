@@ -59,7 +59,7 @@ export default function AuthPage({ registration = false }: { registration?: bool
           </span>
           <span className="brand-name">agentflow.</span>
         </Link>
-        <span className="api-kicker">YOUR AUTOMATION WORKSPACE</span>
+        <span className="api-kicker">YOUR AUTOMATION STUDIO</span>
         <h1>
           Build a workflow.
           <br />
@@ -83,7 +83,7 @@ export default function AuthPage({ registration = false }: { registration?: bool
         <h2>{registration ? 'Create your account' : 'Welcome back'}</h2>
         <p className="muted">
           {registration
-            ? 'Start with your own empty workspace.'
+            ? 'Create an account to start building workflows.'
             : 'Sign in to your saved workflows and execution history.'}
         </p>
         {session.error && (
@@ -94,7 +94,7 @@ export default function AuthPage({ registration = false }: { registration?: bool
         {created ? (
           <div className="api-panel">
             <h3>Account created</h3>
-            <p>Your account is saved. Sign in to open your workspace.</p>
+            <p>Your account is saved. Sign in to start building workflows.</p>
             <Button asChild variant="primary">
               <Link to="/login">Go to sign in</Link>
             </Button>

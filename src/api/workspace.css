@@ -1126,3 +1126,119 @@
     white-space: nowrap;
   }
 }
+
+.workflow-journey ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px 0;
+  margin: 0;
+  list-style: none;
+}
+.workflow-journey li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground, #686477);
+  font-size: 13px;
+}
+.workflow-journey li span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ded5ef;
+  border-radius: 50%;
+}
+.workflow-journey li[aria-current='step'] {
+  color: #7957bd;
+  font-weight: 700;
+}
+.workflow-journey li[aria-current='step'] span {
+  background: #eee7fa;
+  border-color: #7957bd;
+}
+.workflow-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.workflow-readiness ul {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.workflow-readiness h2 {
+  font-size: 17px;
+}
+.workflow-readiness p {
+  font-size: 13px;
+}
+[hidden] {
+  display: none !important;
+}
+.workflow-starters .button {
+  white-space: normal;
+  max-width: 100%;
+  height: auto;
+  min-height: 40px;
+  text-align: left;
+}
+
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.integrations-grid > .api-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 20px;
+}
+.integrations-grid .api-form {
+  gap: 10px;
+}
+.integrations-grid h2 {
+  font-size: 18px;
+}
+.integrations-grid p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.integrations-grid .input {
+  min-width: 0;
+}
+.integrations-grid .button {
+  white-space: normal;
+}
+.integration-management {
+  margin-top: 12px;
+}
+.integration-management > h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.integration-management > p {
+  margin-bottom: 20px;
+}
+.integration-connection {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #e6def2;
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+}
+.integration-connection .button {
+  justify-self: start;
+}
+@media (max-width: 800px) {
+  .integrations-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.integrations-grid .api-panel p,
+.api-shell .integrations-grid .api-panel h2,
+.integrations-grid .api-panel h3 {
+  margin: 0;
+}
