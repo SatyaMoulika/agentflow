@@ -1082,40 +1082,50 @@ export function Integrations() {
   return (
     <div className="api-page">
       <PageHeader title="Integrations" description="Manage connections and test Groq." />
-      <GmailConnections />
-      <GitHubConnections />
-      <HttpConnections />
-      <form className="card api-panel api-form" onSubmit={submit}>
-        <h2>Groq</h2>
-        <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
-        <label className="label" htmlFor="groq-prompt">
-          Prompt
-        </label>
-        <textarea
-          id="groq-prompt"
-          className="input"
-          rows={5}
-          maxLength={4000}
-          required
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-        />
-        <Button type="submit" variant="primary" disabled={pending || !prompt.trim()}>
-          {pending ? 'Sending…' : 'Send to Groq'}
-        </Button>
-        {error ? <Failure error={error} /> : null}
-        {result && (
-          <section>
-            <h3>Response from {result.model}</h3>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{result.content}</p>
-            <ProviderDetails metadata={result.metadata} />
-          </section>
-        )}
-        <p className="muted">
-          This test does not run a workflow. Add a Groq LLM node in the workflow editor to use Groq
-          during a run.
-        </p>
-      </form>
+      <div className="integrations-grid" aria-label="Connect services">
+        <GitHubConnections />
+        <HttpConnections view="connect" />
+        <GmailConnections view="connect" />
+        <form className="card api-panel api-form" onSubmit={submit}>
+          <h2>Groq</h2>
+          <p>Your prompt is sent to Groq when you select Send. The API key stays on the server.</p>
+          <label className="label" htmlFor="groq-prompt">
+            Prompt
+          </label>
+          <textarea
+            id="groq-prompt"
+            className="input"
+            rows={5}
+            maxLength={4000}
+            required
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+          <Button type="submit" variant="primary" disabled={pending || !prompt.trim()}>
+            {pending ? 'Sending…' : 'Send to Groq'}
+          </Button>
+          {error ? <Failure error={error} /> : null}
+          {result && (
+            <section>
+              <h3>Response from {result.model}</h3>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{result.content}</p>
+              <ProviderDetails metadata={result.metadata} />
+            </section>
+          )}
+          <p className="muted">
+            This test does not run a workflow. Add a Groq LLM node in the workflow editor to use
+            Groq during a run.
+          </p>
+        </form>
+      </div>
+      <section className="integration-management" aria-labelledby="manage-connections-title">
+        <h2 id="manage-connections-title">Manage &amp; revoke connections</h2>
+        <p className="muted">Review existing connections and remove access you no longer need.</p>
+        <div className="integrations-grid">
+          <HttpConnections view="manage" />
+          <GmailConnections view="manage" />
+        </div>
+      </section>
     </div>
   );
 }
