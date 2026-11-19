@@ -23,3 +23,5 @@ The create screen starts with an explicit choice: an opt-in starter draft, a Gro
 The editor shows a journey indicator and a setup checklist. Common model/parser nodes expose instruction and input-key fields, with full JSON available for additional settings. Basic edits preserve other configuration keys. Workflow input metadata remains frontend guidance, not a backend-enforced input schema.
 
 Both run entry points request server graph validation before submitting an execution, retaining the existing idempotency-key behavior. This check makes no provider call and does not prove provider availability, connection authorization or output quality; runtime checks remain authoritative. There is no new test mode, scheduler, webhook, write connector or approval mechanism. Existing agent tool checkpoints remain available.
+
+The Integrations screen uses compact, two-column setup cards above a separate “Manage & revoke connections” section for HTTP/GitHub revocation and Gmail disconnection. Cards stack below 800px; the existing owner-scoped API calls, pagination and cache invalidation are retained.

@@ -114,7 +114,7 @@ export default function GitHubConnections() {
         </p>
       )}
       <p className="muted">
-        The HTTP connections list below manages revocation. GitHub returns its first page; large
+        Use Manage & revoke connections below to remove access. GitHub returns its first page; large
         responses can exceed the 64 KiB limit. The issues list can also contain pull requests. No
         automatic triggers or GitHub writes are available.
       </p>
