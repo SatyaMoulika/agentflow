@@ -61,11 +61,11 @@ export default function Shell() {
         <div className="workspace-picker">
           <UserAvatar name={user?.display_name || ''} />
           <span className="workspace-info">
-            <strong>My workspace</strong>
+            <strong>My account</strong>
             <span>Personal account</span>
           </span>
         </div>
-        <div className="nav-label">WORKSPACE</div>
+        <div className="nav-label">NAVIGATION</div>
         <nav aria-label="Main navigation">
           {links.map(([path, label, Icon]) => (
             <NavLink
@@ -112,7 +112,7 @@ export default function Shell() {
             >
               {open ? <X size={18} /> : <Menu size={18} />}
             </Button>
-            <span className="muted">Personal workspace</span>
+            <span className="muted">Personal account</span>
           </div>
           <span className="api-connected">Workflow studio</span>
         </header>

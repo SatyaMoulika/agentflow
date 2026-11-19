@@ -1045,7 +1045,7 @@ export function Unavailable({ kind }: { kind: string }) {
       <PageHeader title={kind} />
       <EmptyState
         title={`${kind} are not available yet`}
-        description="This feature’s backend module is still pending. Your workspace contains no simulated records or connections."
+        description="This feature’s backend module is still pending. Your account contains no simulated records or connections."
         action={
           <Button asChild>
             <Link to="/workflows">Open workflows</Link>

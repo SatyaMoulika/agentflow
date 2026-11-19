@@ -62,7 +62,7 @@ function Root() {
     });
   }, [session.user?.id, session.generation]);
   useEffect(() => {
-    document.title = `AgentFlow · ${location.pathname.includes('executions') ? 'Executions' : 'Workspace'}`;
+    document.title = `AgentFlow · ${location.pathname.includes('executions') ? 'Executions' : 'Workflow studio'}`;
   }, [location.pathname]);
   return <Outlet />;
 }
@@ -118,10 +118,7 @@ const router = createBrowserRouter(
           <Route
             path="*"
             element={
-              <EmptyState
-                title="Page not found"
-                description="Choose a workspace page from the navigation."
-              />
+              <EmptyState title="Page not found" description="Choose a page from the navigation." />
             }
           />
         </Route>
