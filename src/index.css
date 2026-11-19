@@ -1,12 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Lora:ital,wght@1,500&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 @theme {
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Manrope', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 :root {
   font-family:
-    'Inter',
+    'Manrope',
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
@@ -16,40 +16,40 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #f8fafc;
+  --bg: #faf9fd;
   --surface: #fff;
-  --surface-secondary: #f1f5f9;
-  --text: #172036;
-  --muted: #64748b;
-  --border: #e6eaf0;
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-button: #5b5ee6;
+  --surface-secondary: #f4f0fa;
+  --text: #243447;
+  --muted: #52677c;
+  --border: #e2ddec;
+  --primary: #7957bd;
+  --primary-hover: #6343a6;
+  --primary-button: #7957bd;
   --primary-foreground: #ffffff;
-  --primary-soft: #eef0ff;
+  --primary-soft: #f1ebfa;
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
   --sidebar: #fff;
-  --radius: 11px;
-  --shadow: 0 2px 4px #0f172a02, 0 1px 2px #0f172a03;
-  --chart-grid: #eef1f5;
+  --radius: 14px;
+  --shadow: 0 3px 12px #42305e04, 0 1px 2px #42305e03;
+  --chart-grid: #eee8f5;
   color-scheme: light;
 }
 [data-theme='dark'] {
-  --bg: #0e1018;
-  --surface: #171a26;
-  --surface-secondary: #202535;
-  --text: #ecedf6;
-  --muted: #9ca6bc;
-  --border: #2b3143;
-  --primary: #9295ff;
-  --primary-hover: #b1b3ff;
-  --primary-button: #9295ff;
-  --primary-foreground: #141722;
-  --primary-soft: #292b4f;
-  --sidebar: #141722;
-  --chart-grid: #292e40;
+  --bg: #14121b;
+  --surface: #1d1927;
+  --surface-secondary: #292333;
+  --text: #f0edf6;
+  --muted: #b5adbf;
+  --border: #3b324b;
+  --primary: #c2aaee;
+  --primary-hover: #d8c7f5;
+  --primary-button: #c2aaee;
+  --primary-foreground: #241a35;
+  --primary-soft: #322442;
+  --sidebar: #1a1623;
+  --chart-grid: #362d43;
   color-scheme: dark;
 }
 * {
@@ -125,11 +125,11 @@ select {
   color: var(--text);
 }
 ::selection {
-  background: #c7d2fe;
-  color: #252760;
+  background: #e4d8f6;
+  color: #422e69;
 }
 :focus-visible {
-  outline: 3px solid #818cf8;
+  outline: 3px solid var(--primary);
   outline-offset: 3px;
 }
 hr {
@@ -178,7 +178,7 @@ pre {
   background: var(--primary-button);
   color: var(--primary-foreground);
   border-color: var(--primary-button);
-  box-shadow: 0 2px 3px #6366f11a;
+  box-shadow: 0 3px 8px #7957bd20;
 }
 .button-primary:hover {
   background: var(--primary-hover);
@@ -239,7 +239,7 @@ textarea {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #9aa4b4;
+  color: var(--muted);
 }
 .field {
   display: flex;

@@ -5,6 +5,7 @@ import { Button } from '../components/ui';
 import { client } from './client';
 import { Failure, Pending } from './common';
 import { useSession } from './session';
+import { FlowIllustration } from './FlowIllustration';
 export default function AuthPage({ registration = false }: { registration?: boolean }) {
   const session = useSession();
   const navigate = useNavigate();
@@ -68,6 +69,7 @@ export default function AuthPage({ registration = false }: { registration?: bool
           Save your definitions, follow each selected branch, and inspect persisted inputs and
           results.
         </p>
+        <FlowIllustration />
         <div className="api-auth-path">
           <span>Design</span>
           <ArrowRight />

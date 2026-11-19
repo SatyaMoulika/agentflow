@@ -228,8 +228,8 @@
   background: var(--surface);
 }
 .api-auth-story {
-  background: #11182c;
-  color: #edf0ff;
+  background: var(--primary-soft);
+  color: var(--text);
   padding: 60px 10%;
   display: flex;
   flex-direction: column;
@@ -246,10 +246,10 @@
   letter-spacing: -2px;
 }
 .api-auth-story h1 span {
-  color: #a6a9ff;
+  color: var(--primary);
 }
 .api-auth-story p {
-  color: #b4bfd7;
+  color: var(--muted);
   max-width: 400px;
   font-size: 15px;
   line-height: 1.8;
@@ -257,7 +257,7 @@
 .api-kicker {
   font-size: 10px;
   letter-spacing: 0.15em;
-  color: #a6a9ff;
+  color: var(--primary);
 }
 .api-auth-path {
   display: flex;
@@ -266,13 +266,13 @@
   padding-top: 30px;
 }
 .api-auth-path span {
-  border: 1px solid #36405a;
+  border: 1px solid var(--border);
   border-radius: 9px;
   padding: 10px;
 }
 .api-auth-path svg {
   width: 15px;
-  color: #808eb0;
+  color: var(--primary);
 }
 .api-auth-form {
   padding: 65px 12%;
@@ -690,5 +690,407 @@
   }
   .api-canvas {
     height: 380px;
+  }
+}
+
+/* Porcelain & Violet — ai-portfolio's white surfaces, ink and violet accent.
+   Decorative diagrams are illustrative, not a live workflow or run status. */
+.api-shell .sidebar {
+  padding-top: 30px;
+  background: var(--surface);
+}
+.api-shell .brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 17%, transparent);
+}
+.api-shell .brand-name {
+  font-weight: 800;
+  letter-spacing: -1.1px;
+}
+.api-shell .workspace-picker {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 13px 11px;
+}
+.api-shell .nav-item {
+  min-height: 43px;
+  border-radius: 9px;
+  font-weight: 600;
+}
+.api-shell .nav-item.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.api-shell .nav-item.active::before {
+  display: none;
+}
+.api-shell .topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.api-shell .api-connected {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: transparent;
+}
+.api-shell .sidebar-bottom > .api-panel {
+  margin: 18px 0 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+}
+.api-shell .sidebar-bottom > .api-panel strong {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+}
+.api-shell .sidebar-bottom > .api-panel p {
+  font-size: 11px;
+  margin: 8px 0 0;
+  line-height: 1.8;
+}
+.api-shell .sidebar-bottom {
+  padding-top: 16px;
+}
+.api-shell .app-footer {
+  font-size: 11px;
+}
+.api-shell .workspace-info > span,
+.api-shell .nav-label {
+  font-size: 11px;
+}
+.api-shell .sidebar-user {
+  min-width: 0;
+}
+.api-shell .sidebar-user strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.api-shell .api-panel h2 {
+  font-weight: 750;
+}
+.api-shell .api-stat {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  gap: 8px;
+}
+.api-shell .api-stat::after {
+  content: '';
+  width: 80px;
+  height: 80px;
+  border: 16px solid var(--primary-soft);
+  border-radius: 50%;
+  position: absolute;
+  right: -20px;
+  top: -20px;
+  pointer-events: none;
+}
+.api-shell .api-stat > strong {
+  font-weight: 750;
+}
+.api-workflow-card {
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+.api-workflow-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.api-workflow-card h2 {
+  font-weight: 750;
+}
+.api-table th {
+  background: var(--surface-secondary);
+  font-size: 11px;
+}
+.api-table td {
+  font-size: 12px;
+}
+.api-studio-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--primary);
+}
+.api-welcome {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 28px;
+  padding: 25px 36px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(115deg, var(--surface) 15%, var(--primary-soft));
+}
+.api-welcome h2 {
+  font-size: clamp(25px, 2.8vw, 34px);
+  line-height: 1.3;
+  letter-spacing: -1.1px;
+  font-weight: 750;
+  margin: 12px 0;
+}
+.api-welcome h2 span {
+  color: var(--primary);
+}
+.api-welcome p {
+  color: var(--muted);
+  max-width: 380px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.api-studio-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 17px;
+}
+.api-studio-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.flow-illustration {
+  width: 100%;
+  max-width: 520px;
+  align-self: center;
+}
+.flow-illustration svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.flow-grid-dot {
+  fill: var(--primary);
+  opacity: 0.12;
+}
+.flow-shadow {
+  fill: var(--primary);
+  opacity: 0.06;
+}
+.flow-wires path {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2;
+}
+.flow-wires .flow-signal {
+  stroke: var(--primary);
+  stroke-width: 1.8;
+  stroke-dasharray: 6 7;
+  opacity: 0.65;
+}
+.flow-module rect {
+  fill: var(--surface);
+  stroke: color-mix(in srgb, var(--primary) 30%, var(--border));
+  stroke-width: 1.4;
+}
+.flow-module .flow-offset {
+  fill: var(--surface);
+}
+.flow-module-main rect {
+  fill: var(--primary-soft);
+  stroke: var(--primary);
+}
+.flow-module text {
+  font-size: 10px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  fill: var(--muted);
+  text-anchor: middle;
+}
+.flow-module .flow-glyph {
+  stroke: var(--primary);
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.flow-dot {
+  fill: var(--primary);
+}
+.flow-caption text {
+  font-size: 9px;
+  font-family: var(--font-sans);
+  letter-spacing: 1px;
+  fill: var(--primary);
+}
+.api-auth-story {
+  background: linear-gradient(145deg, var(--surface) 0%, var(--primary-soft) 90%);
+  color: var(--text);
+  padding: 42px 10%;
+  gap: 20px;
+  border-right: 1px solid var(--border);
+}
+.api-auth-story .brand {
+  margin-bottom: 24px;
+}
+.api-auth-story .brand-mark {
+  background: var(--primary-button);
+  box-shadow: none;
+}
+.api-auth-story .brand-name {
+  color: var(--text);
+}
+.api-auth-story h1 {
+  font-size: clamp(32px, 3.2vw, 48px);
+  line-height: 1.2;
+  font-weight: 750;
+}
+.api-auth-story h1 span {
+  color: var(--primary);
+  font-family: Lora, Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+}
+.api-auth-story p {
+  color: var(--muted);
+  font-size: 14px;
+}
+.api-auth-story .api-kicker {
+  color: var(--primary);
+  font-size: 11px;
+}
+.api-auth-path {
+  padding-top: 0;
+  font-size: 12px;
+}
+.api-auth-path span {
+  border-color: var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 12px;
+}
+.api-auth-path svg {
+  color: var(--primary);
+}
+.api-auth-form {
+  padding-top: 45px;
+  padding-bottom: 45px;
+}
+.api-auth-form > .api-accent {
+  padding: 10px;
+  width: 48px;
+  height: 48px;
+  background: var(--primary-soft);
+  border-radius: 14px;
+}
+.api-auth-form h2 {
+  font-weight: 750;
+}
+.api-auth-form input {
+  min-height: 44px;
+  border-radius: 9px;
+}
+.api-auth-form button[type='submit'] {
+  min-height: 44px;
+  border-radius: 9px;
+}
+.api-auth-form .input::placeholder {
+  color: var(--muted);
+}
+.api-node {
+  border-radius: 13px;
+  padding: 16px 20px;
+}
+.api-node-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.api-canvas .react-flow {
+  --xy-edge-stroke-default: var(--primary);
+  --xy-edge-stroke-selected-default: var(--primary-hover);
+  --xy-handle-background-color-default: var(--primary);
+  --xy-handle-border-color-default: var(--surface);
+  --xy-controls-button-background-color-default: var(--surface);
+  --xy-controls-button-background-color-hover-default: var(--surface-secondary);
+  --xy-controls-button-color-default: var(--text);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-background-pattern-dots-color-default: var(--border);
+  --xy-edge-label-background-color-default: var(--surface);
+  --xy-edge-label-color-default: var(--text);
+}
+@media (max-width: 1000px) {
+  .api-welcome {
+    padding: 24px;
+    gap: 15px;
+  }
+  .api-auth-story {
+    padding-inline: 8%;
+  }
+}
+@media (max-width: 767px) {
+  .api-welcome {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 24px;
+  }
+  .flow-illustration-compact {
+    max-width: 360px;
+  }
+  .api-auth-story {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 28px;
+    gap: 16px;
+  }
+  .api-auth-story .flow-illustration {
+    max-width: 320px;
+  }
+  .api-auth-story h1 {
+    font-size: 32px;
+  }
+  .api-auth-story .brand {
+    margin: 0;
+  }
+  .api-auth-story .api-kicker {
+    display: block;
+  }
+  .api-auth-form {
+    padding: 32px 24px;
+  }
+}
+@media (max-height: 750px) and (min-width: 768px) {
+  .api-auth-story .flow-illustration {
+    max-width: 340px;
+  }
+  .api-auth-story {
+    gap: 16px;
+    padding-block: 28px;
+  }
+  .api-auth-story .brand {
+    margin-bottom: 12px;
+  }
+}
+
+.api-shell .nav-label {
+  color: var(--muted);
+}
+.api-shell .brand-mark svg,
+.api-auth-story .brand-mark svg {
+  stroke: var(--primary-foreground);
+}
+
+.api-shell .api-mobile {
+  display: none;
+}
+@media (max-width: 767px) {
+  .api-shell .api-mobile {
+    display: inline-flex;
+  }
+  .api-shell .topbar .api-actions {
+    flex-wrap: nowrap;
+  }
+  .api-shell .api-connected {
+    white-space: nowrap;
   }
 }

@@ -85,3 +85,7 @@ Vite proxies relative `/api` requests to `http://127.0.0.1:8000`; set server-sid
 - [Implementation plan](docs/backend-implementation-plan.md)
 - [API contracts](docs/api/endpoints.md)
 - [Design system](docs/design-system.md)
+
+## Interface design
+
+The active frontend uses a Porcelain & Violet variation of the shared `ai-portfolio` design system. See [interface design and verification](docs/porcelain-violet-interface.md) for palette provenance, illustration scope and UI checks.
