@@ -81,7 +81,7 @@ export default function Shell() {
         </nav>
         <div className="sidebar-bottom">
           <div className="api-panel">
-            <strong>Your data, persisted.</strong>
+            <strong>A little structure. More flow.</strong>
             <p className="muted">Save workflows and inspect actual execution results.</p>
           </div>
           <div className="sidebar-user">
@@ -114,7 +114,7 @@ export default function Shell() {
             </Button>
             <span className="muted">Personal workspace</span>
           </div>
-          <span className="api-connected">API workspace</span>
+          <span className="api-connected">Workflow studio</span>
         </header>
         <main className="page-content">
           {error !== null && <Failure error={error} />}
@@ -122,7 +122,7 @@ export default function Shell() {
         </main>
         <footer className="app-footer">
           <span>Thoughtfully automated.</span>
-          <span>AgentFlow · PostgreSQL-backed workspace</span>
+          <span>AgentFlow · Workflow studio</span>
         </footer>
       </div>
     </div>

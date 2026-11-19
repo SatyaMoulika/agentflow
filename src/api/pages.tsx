@@ -10,6 +10,7 @@ import { Failure, Pages, Pending } from './common';
 import { starterDefinition } from './graph';
 import { useScope, useSession } from './session';
 import Canvas from './Canvas';
+import { FlowIllustration } from './FlowIllustration';
 import HttpConnections, { PlannerConnectionPicker } from './Connections';
 import GmailConnections from './GmailConnections';
 import GitHubConnections from './GitHubConnections';
@@ -46,6 +47,21 @@ export function Dashboard() {
           </Button>
         }
       />
+      <section className="api-welcome" aria-label="Workflow studio">
+        <div>
+          <span className="api-studio-label">YOUR WORKFLOW STUDIO</span>
+          <h2>
+            Connect the steps.
+            <br />
+            <span>Bring the idea to life.</span>
+          </h2>
+          <p>Design a flow, follow its branches, and see the story behind each execution.</p>
+          <Link to="/workflows" className="api-studio-link">
+            Explore your workflows <ArrowRight size={15} />
+          </Link>
+        </div>
+        <FlowIllustration compact />
+      </section>
       <div className="api-stats">
         <div className="card api-stat">
           <Workflow />
