@@ -45,7 +45,45 @@ export function RunOutput({
     isModelOutput && typeof output === 'object' && output !== null && 'content' in output
       ? output.content
       : null;
-  if (typeof content !== 'string' || !content.trim()) return <JsonViewer data={output} />;
+  if (typeof content !== 'string' || !content.trim()) {
+    const fields =
+      typeof output === 'object' && output !== null && !Array.isArray(output)
+        ? Object.entries(output)
+        : null;
+    return (
+      <div className="api-output">
+        {fields ? (
+          fields.length ? (
+            <dl className="execution-fields">
+              {fields.map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key}</dt>
+                  <dd>
+                    {value !== null && typeof value === 'object' ? (
+                      <details>
+                        <summary>View structured value</summary>
+                        <JsonViewer data={value} />
+                      </details>
+                    ) : (
+                      <span>{value === null ? 'null' : String(value)}</span>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="muted">The workflow returned an empty object.</p>
+          )
+        ) : (
+          <p className="execution-value">{String(output)}</p>
+        )}
+        <details className="api-output-raw">
+          <summary>View raw output</summary>
+          <JsonViewer data={output} />
+        </details>
+      </div>
+    );
+  }
   return (
     <div className="api-output">
       <div className="api-output-label">Generated response</div>

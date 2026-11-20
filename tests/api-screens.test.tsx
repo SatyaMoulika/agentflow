@@ -635,3 +635,40 @@ it('explains a scheduled retry and preserves the failed attempt history', () => 
   expect(markup).toContain('Cancel execution');
   expect(markup).not.toContain('Executing the saved workflow.');
 });
+
+it.each(['gmail_read', 'http', 'agent'])(
+  'does not offer full-workflow retry for a failed %s workflow',
+  (type) => {
+    authenticated();
+    const definition = starterDefinition();
+    definition.nodes.splice(1, 0, { id: 'external', type, config: {} });
+    definition.edges = [
+      { id: 'first', source: 'start', target: 'external', source_handle: 'default' },
+      { id: 'last', source: 'external', target: 'finish', source_handle: 'default' },
+    ];
+    const markup = render(
+      `/executions/${id}`,
+      <RunView />,
+      (cache) =>
+        cache.setQueryData([user.id, 1, 'run', id], {
+          id,
+          workflow_id: id,
+          workflow_version_id: id,
+          status: 'failed',
+          max_attempts: 1,
+          parent_run_id: null,
+          created_at: '2026-11-19T00:00:00Z',
+          completed_at: null,
+          started_at: null,
+          input: {},
+          output: null,
+          error_code: 'CONNECTION_UNAVAILABLE',
+          node_runs: [],
+          version: { id, version_number: 1, definition },
+        }),
+      '/executions/:executionId',
+    );
+    expect(markup).not.toContain('Retry full workflow');
+    expect(markup).toContain('Full-workflow retry is unavailable');
+  },
+);

@@ -1,3 +1,5 @@
+import { ExecutionResult } from './ExecutionResult';
+import { failureGuidance } from './failureGuidance';
 import { StarterChooser } from './StarterChooser';
 import { WorkflowJourney } from './WorkflowJourney';
 import { date, elapsed } from './format';
@@ -16,7 +18,6 @@ import { FlowIllustration } from './FlowIllustration';
 import HttpConnections, { PlannerConnectionPicker } from './Connections';
 import GmailConnections from './GmailConnections';
 import GitHubConnections from './GitHubConnections';
-import { RunOutput } from './RunOutput';
 import { IntegrationHeading } from './IntegrationHeading';
 import { ConnectionReview, ProviderDetails } from './ProviderDetails';
 import type {
@@ -776,7 +777,7 @@ export function RunView() {
   const data = run.data;
   const pausedAgent = data.node_runs.find((row) => row.checkpoint?.status === 'paused');
   const hasExternalCall = data.version.definition.nodes.some((node) =>
-    ['groq', 'classify', 'extract', 'http', 'agent'].includes(node.type),
+    ['groq', 'classify', 'extract', 'http', 'agent', 'gmail_read'].includes(node.type),
   );
   async function command(kind: 'retry' | 'cancel') {
     if (
@@ -912,11 +913,12 @@ export function RunView() {
             Elapsed {elapsed(data.started_at || data.created_at, data.completed_at)}
           </span>
         </div>
-        {data.error_code && <p className="api-error">Failure: {data.error_code}</p>}
+        {data.error_code && <small className="muted">Failure code: {data.error_code}</small>}
         <small className="muted">
           Created {date(data.created_at)} · Completed {date(data.completed_at)}
         </small>
       </section>
+      <ExecutionResult run={data} />
       <Canvas definition={data.version.definition} statuses={statuses} />
       <ExecutionEvents
         key={executionId}
@@ -925,30 +927,37 @@ export function RunView() {
         sequence={data.event_sequence}
         attempts={data.node_runs}
       />
-      <div className="api-two-columns">
-        <section className="card api-panel">
-          <h2>Run input</h2>
-          <JsonViewer data={data.input} />
-        </section>
-        <section className="card api-panel">
-          <h2>Run output</h2>
-          <RunOutput
-            output={data.output}
-            attempts={data.node_runs}
-            nodes={data.version.definition.nodes}
-          />
-        </section>
-      </div>
+      <details className="card api-panel">
+        <summary>Run input &amp; stored output</summary>
+        <div className="api-two-columns">
+          <div>
+            <h3>Run input</h3>
+            <JsonViewer data={data.input} />
+          </div>
+          <div>
+            <h3>Stored output</h3>
+            <JsonViewer data={data.output} />
+          </div>
+        </div>
+      </details>
       <section className="card api-panel">
-        <h2>Node attempts</h2>
+        <h2>Step details</h2>
         <p className="muted">
           Unvisited nodes after a failure have no attempt. Completed runs record the unchosen
           branches as skipped.
         </p>
         {data.node_runs.map((row) => (
-          <details className="api-attempt" key={row.id}>
+          <details
+            className="api-attempt"
+            id={`attempt-${row.id}`}
+            key={row.id}
+            open={row.checkpoint?.status === 'paused' || undefined}
+          >
             <summary>
-              <strong>{row.node_id}</strong>
+              <strong>
+                {data.version.definition.nodes.find((node) => node.id === row.node_id)?.label ||
+                  row.node_id}
+              </strong>
               <Badge status={row.status} />
               <span>
                 Attempt {row.attempt_number} ·{' '}
@@ -958,7 +967,12 @@ export function RunView() {
             <p>
               Started {date(row.started_at)} · Completed {date(row.completed_at)}
             </p>
-            {row.error_code && <p className="api-error">{row.error_code}</p>}
+            {row.error_code && (
+              <div className="api-error">
+                <p>{failureGuidance(row.error_code)}</p>
+                <small>Code: {row.error_code}</small>
+              </div>
+            )}
             {row.retry && (
               <p>
                 Retry scheduled for {date(row.retry.due_at)}
