@@ -58,15 +58,8 @@ export default function Shell() {
             agentflow<span className="brand-period">.</span>
           </span>
         </Link>
-        <div className="workspace-picker">
-          <UserAvatar name={user?.display_name || ''} />
-          <span className="workspace-info">
-            <strong>My account</strong>
-            <span>Personal account</span>
-          </span>
-        </div>
         <div className="nav-label">NAVIGATION</div>
-        <nav aria-label="Main navigation">
+        <nav id="app-navigation" aria-label="Main navigation">
           {links.map(([path, label, Icon]) => (
             <NavLink
               key={path}
@@ -96,6 +89,7 @@ export default function Shell() {
               variant="ghost"
               onClick={logout}
               title="Sign out"
+              aria-label="Sign out"
             >
               <LogOut size={17} />
             </Button>
@@ -103,20 +97,18 @@ export default function Shell() {
         </div>
       </aside>
       <div className="main-shell">
-        <header className="topbar">
-          <div className="api-actions">
+        <main className="page-content">
+          <div className="api-mobile-navigation">
             <Button
-              className="api-mobile"
               onClick={() => setOpen(!open)}
-              aria-label="Open navigation"
+              aria-label={open ? 'Close navigation' : 'Open navigation'}
+              aria-controls="app-navigation"
+              aria-expanded={open}
             >
               {open ? <X size={18} /> : <Menu size={18} />}
+              Menu
             </Button>
-            <span className="muted">Personal account</span>
           </div>
-          <span className="api-connected">Workflow studio</span>
-        </header>
-        <main className="page-content">
           {error !== null && <Failure error={error} />}
           <Outlet />
         </main>

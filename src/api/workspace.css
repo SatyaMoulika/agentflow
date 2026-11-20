@@ -1301,3 +1301,13 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.api-mobile-navigation {
+  display: none;
+}
+@media (max-width: 767px) {
+  .api-mobile-navigation {
+    display: flex;
+    margin-bottom: 20px;
+  }
+}
