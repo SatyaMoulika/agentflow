@@ -253,7 +253,7 @@ class ExecutionEvent(Base):
         CheckConstraint("sequence >= 1", name="sequence_positive"),
         CheckConstraint(
             "(event_type IN ('node.created', 'node.status_changed', 'node.retry_scheduled', "
-            "'agent.checkpointed', 'agent.resumed')) "
+            "'agent.checkpointed', 'agent.resumed', 'approval.requested', 'approval.resolved')) "
             "= (node_run_id IS NOT NULL)",
             name="event_node_context",
         ),

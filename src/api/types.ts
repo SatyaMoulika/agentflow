@@ -210,3 +210,21 @@ export interface RunItem {
   completed_at: string | null;
   error_code: string | null;
 }
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled';
+export interface Approval {
+  id: string;
+  workflow_run_id: string;
+  node_run_id: string;
+  node_id: string;
+  assigned_to: string;
+  title: string;
+  status: ApprovalStatus;
+  note: string | null;
+  created_at: string;
+  expires_at: string;
+  resolved_at: string | null;
+}
+export interface ApprovalDetail extends Approval {
+  input: JsonObject;
+}

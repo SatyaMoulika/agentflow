@@ -87,6 +87,9 @@ async def test_invalid_registration_is_422_without_echoed_fields(
 async def test_openapi_registration_schemas_match_public_contract() -> None:
     schema = create_app().openapi()
     assert set(schema["paths"]) == {
+        "/api/v1/approvals",
+        "/api/v1/approvals/{approval_id}",
+        "/api/v1/approvals/{approval_id}/decision",
         "/api/v1/connections",
         "/api/v1/connections/{connection_id}",
         "/api/v1/workflows/generate",

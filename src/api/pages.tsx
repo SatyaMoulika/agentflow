@@ -111,8 +111,8 @@ export function Dashboard() {
         <h2>Build with supported nodes</h2>
         <p className="muted">
           Generate a proposal with AI, or build with manual, transform, condition, calculator, Groq,
-          JSON parser, classify, extract, HTTP GET, merge and end nodes. Approvals are not available
-          yet.
+          JSON parser, classify, extract, HTTP GET, merge and end nodes. Owner approvals are
+          available for pure workflows in background mode.
         </p>
       </section>
     </div>
@@ -610,6 +610,10 @@ function eventDescription(event: ExecutionEvent, attempts: NodeAttempt[]) {
   const node = attempt?.node_id || event.payload.node_id;
   const target = event.payload.to_status;
   switch (event.event_type) {
+    case 'approval.requested':
+      return 'Owner approval requested';
+    case 'approval.resolved':
+      return `Approval ${typeof event.payload.status === 'string' ? event.payload.status : 'resolved'}`;
     case 'run.created':
       return 'Execution created';
     case 'run.status_changed':
@@ -779,6 +783,7 @@ export function RunView() {
   const hasExternalCall = data.version.definition.nodes.some((node) =>
     ['groq', 'classify', 'extract', 'http', 'agent', 'gmail_read'].includes(node.type),
   );
+  const hasApproval = data.version.definition.nodes.some((node) => node.type === 'approval');
   async function command(kind: 'retry' | 'cancel') {
     if (
       kind === 'cancel' &&
@@ -844,7 +849,7 @@ export function RunView() {
             <Button asChild>
               <Link to={`/executions?workflow_id=${data.workflow_id}`}>Workflow history</Link>
             </Button>
-            {['failed', 'cancelled'].includes(data.status) && !hasExternalCall && (
+            {['failed', 'cancelled'].includes(data.status) && !hasExternalCall && !hasApproval && (
               <Button
                 disabled={!!commandBusy}
                 loading={commandBusy === 'retry'}
@@ -888,6 +893,9 @@ export function RunView() {
           Full-workflow retry is unavailable for workflows with external calls. Start a new run
           explicitly to call the provider or endpoint again.
         </p>
+      )}
+      {hasApproval && ['failed', 'cancelled'].includes(data.status) && (
+        <p className="api-notice">Start a new run explicitly to request another approval.</p>
       )}
       <section className="card api-panel">
         <div className="api-section">
@@ -1048,6 +1056,12 @@ export function RunView() {
         ))}
       </section>
       <p className="muted">
+        {data.status === 'waiting_approval' && (
+          <>
+            <Link to={`/approvals?run_id=${data.id}`}>Review pending approval</Link>
+            <br />
+          </>
+        )}
         Traces are not available yet. Cancellation preserves completed history; retry starts the
         full original workflow for supported pure-node runs. No simulated telemetry is shown.
       </p>

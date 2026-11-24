@@ -1,5 +1,15 @@
 # Verification
 
+## Owner approvals — 23 November 2026
+
+Implemented owner-only approvals for pure background workflows: strict node configuration, retained requests and decisions, atomic waiting/release, approve/reject, expiry/cancellation and outbox continuation, plus real queue and review/detail screens. Migration **0014** adds approval storage and ordered event types. Approval graphs with external calls are rejected; AI edit proposals for approval graphs are blocked before calling Groq.
+
+The full backend Pytest suite passed **1,416 tests** with guarded disposable PostgreSQL and Redis. Coverage includes competing decisions, ownership, cancellation, expiry, rollback of a decision when resume-intent creation fails, exact-version continuation after an edit, immutable decision history, migration downgrade/re-upgrade and metadata agreement. A real Redis/Celery test verified that a waiting approval releases the worker for another workflow and that a decision resumes the saved run after worker/dispatcher processes restart, preserving earlier attempts. A stale pre-existing HTTP-agent integration assertion was updated to the implemented 32 KiB bound.
+
+Ruff lint and Pyright passed; all changed Python files and new migration 0014 passed formatting checks. The required combined backend checker still stops at the pre-existing whitespace formatting issue in applied migration 0013, which was preserved under the project rule against editing applied revisions; Pytest was therefore run separately with both integration flags. Frontend verification passed **187 tests**, ESLint, TypeScript and production build. `git diff --check` passed.
+
+The browser access host remains unavailable, so no browser visual or click-through acceptance was claimed. Initial private-configuration presence checks found Gmail OAuth client ID/secret absent; the user is configuring those privately. No live Gmail/Groq call or real inbox fixture was used. Development data, applied migrations and private configuration were not changed by the agent. Only the task-started test services were stopped/removed after verification. Apply the new migration to the intended application database and enable the documented background processes before trying approvals. See [approval setup and contracts](learning-notes/approvals.md).
+
 ## Saved workflow run forms — 19 November 2026
 
 The run section lists saved workflows and opens the current saved version with user-defined text, number and boolean input fields. Definitions are stored inside existing version metadata. Direct manual-to-tool input fields can be suggested; missing or malformed metadata retains the advanced JSON path. Tests cover suggestions, typed inputs, defaults, key preservation, malformed definitions and the rendered run form. The form is client-side guidance rather than an API validation policy. Browser acceptance remains pending because the browser access host was unavailable.
@@ -109,6 +119,6 @@ When browser access is available, use the [startup walkthrough](real-backend-wal
 5. Review generation/edit proposals and explicit HTTP connection selection before applying/saving. Use synthetic input for optional live Groq checks.
 6. Create a no-auth public HTTPS JSON connection, run it explicitly, revoke it and confirm a fresh run is refused. Never use private business data for acceptance fixtures.
 7. Follow the [HTTP agent sample](learning-notes/http-agent.md): explicitly select a connection, save/validate, inspect actual HTTP/calculator results and usage, then verify revocation blocks a fresh run while prior history stays readable. Check removing missing/revoked selections in the inspector.
-8. Confirm approvals are honestly marked unavailable, and inspect keyboard navigation, focus, contrast, dialogs and canvas at desktop/tablet/mobile widths.
+8. Verify owner approval review/decisions for pure background workflows, and inspect keyboard navigation, focus, contrast, dialogs and canvas at desktop/tablet/mobile widths.
 
 See the [implementation plan](backend-implementation-plan.md) for current phase scope; historical increment results remain in the [development log](development-log.md).

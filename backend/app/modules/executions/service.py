@@ -58,7 +58,7 @@ from app.modules.executions.state import (
 )
 from app.modules.workflows.compiler import compile_workflow
 from app.modules.workflows.exceptions import WorkflowNotFoundError
-from app.modules.workflows.node_registry import EXECUTION_READY_TYPES
+from app.modules.workflows.node_registry import BACKGROUND_READY_TYPES, EXECUTION_READY_TYPES
 from app.modules.workflows.repository import WorkflowRepository
 from app.modules.workflows.schemas import WorkflowVersionResponse
 
@@ -171,8 +171,10 @@ class ExecutionService:
             background = (
                 self.settings is not None
                 and self.settings.background_execution_enabled
-                and all(node.type in RETRY_SAFE_TYPES for node in plan.nodes)
+                and all(node.type in BACKGROUND_READY_TYPES for node in plan.nodes)
             )
+            if any(node.type == "approval" for node in plan.nodes) and not background:
+                raise WorkflowNotExecutableError()
             with self.database.unit_of_work() as session:
                 # Serialize command creation per owner, including keys used on different
                 # workflows. Never hold this lock during compilation or computation.
@@ -394,6 +396,9 @@ class ExecutionService:
                         )
                         .values(cancelled_at=func.clock_timestamp())
                     )
+                    from app.modules.approvals.service import cancel_pending
+
+                    cancel_pending(session, run)
             return self.get(run_id=run_id, owner_id=owner_id)
         except (OperationalError, TimeoutError):
             raise ExecutionStorageUnavailableError(run_id) from None

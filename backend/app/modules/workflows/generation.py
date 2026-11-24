@@ -127,7 +127,7 @@ def _validate(
                 "invalid_graph", tuple(sorted({issue.code for issue in compiled.issues}))[:5]
             )
         if any(
-            node.type not in EXECUTION_READY_TYPES or node.type == "gmail_read"
+            node.type not in EXECUTION_READY_TYPES or node.type in {"gmail_read", "approval"}
             for node in plan.nodes
         ):
             raise InvalidProposalError("invalid_graph")
@@ -161,7 +161,7 @@ def generate(
                 item.type
                 for item in node_type_catalog().items
                 if item.execution_ready
-                and item.type != "gmail_read"
+                and item.type not in {"gmail_read", "approval"}
                 and (item.type != "http" or catalog)
             ]
         )

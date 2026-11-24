@@ -164,6 +164,16 @@ def generate_workflow_edit_proposal(
                 "AI edits for workflows with Gmail nodes are not available yet.",
             ),
         )
+    if any(isinstance(node, dict) and node.get("type") == "approval" for node in nodes):
+        return error_response(
+            request,
+            422,
+            headers={"Cache-Control": "no-store"},
+            public_error=(
+                "APPROVAL_PROPOSAL_UNAVAILABLE",
+                "AI edits for workflows with approval nodes are not available yet.",
+            ),
+        )
     if len(json.dumps(definition, ensure_ascii=False).encode("utf-8")) > 32000:
         return error_response(
             request,

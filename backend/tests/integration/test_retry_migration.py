@@ -156,6 +156,6 @@ def test_retry_history_prevents_downgrade(
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0007")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0014"
     assert connection.scalar(text("SELECT count(*) FROM execution_events")) == before
     assert connection.scalar(text("SELECT count(*) FROM node_retries")) == 1

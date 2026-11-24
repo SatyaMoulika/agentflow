@@ -114,8 +114,8 @@ async def test_run_openapi_documents_delivery_modes_and_public_json_names() -> N
     schema = create_app().openapi()
     create = schema["paths"]["/api/v1/workflows/{workflow_id}/runs"]["post"]
     get = schema["paths"]["/api/v1/runs/{run_id}"]["get"]
-    assert len(schema["paths"]) == 28
-    assert sum(len(path) for path in schema["paths"].values()) == 33
+    assert len(schema["paths"]) == 31
+    assert sum(len(path) for path in schema["paths"].values()) == 36
     resume = schema["paths"]["/api/v1/runs/{run_id}/agent-resume"]["post"]
     assert resume["operationId"] == "resume_workflow_agent"
     assert resume["security"] == [{"AccessBearer": []}]

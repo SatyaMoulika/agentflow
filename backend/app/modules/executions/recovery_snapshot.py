@@ -17,9 +17,9 @@ from app.modules.executions.recovery import (
     reconstruct_progress,
 )
 from app.modules.executions.repository import ExecutionRepository
-from app.modules.executions.runner import RETRY_SAFE_TYPES
 from app.modules.executions.state import RunStatus
 from app.modules.workflows.compiler import CompiledWorkflow, compile_workflow
+from app.modules.workflows.node_registry import BACKGROUND_READY_TYPES
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,7 @@ def read_recovery_snapshot(database: Database, *, owner_id: UUID, claim: Claim) 
         revision, status, max_attempts = run.revision, run.status, run.max_attempts
     compiled = compile_workflow(definition)
     plan = compiled.plan
-    if plan is None or any(node.type not in RETRY_SAFE_TYPES for node in plan.nodes):
+    if plan is None or any(node.type not in BACKGROUND_READY_TYPES for node in plan.nodes):
         raise WorkflowNotExecutableError()
     progress = reconstruct_progress(plan, initial, attempts)
     if status == RunStatus.QUEUED and (progress.state != "ready" or progress.visited):

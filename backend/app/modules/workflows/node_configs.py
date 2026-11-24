@@ -45,6 +45,20 @@ class MergeConfig(NodeConfig):
     """Exclusive-branch reconvergence copies only the chosen incoming output."""
 
 
+class ApprovalConfig(NodeConfig):
+    """The workflow owner reviews the resolved input before a selected branch continues."""
+
+    title: str = Field(min_length=1, max_length=200)
+    expires_in_seconds: int = Field(default=86400, ge=60, le=604800)
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Provide an approval title")
+        return value
+
+
 class GroqConfig(NodeConfig):
     """Send a string field from the node's resolved input to the configured model."""
 

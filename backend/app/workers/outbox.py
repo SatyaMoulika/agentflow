@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import ConfigurationError, load_settings
 from app.core.tracing import configure_local_export, shutdown_export
 from app.infrastructure.database.session import Database
+from app.modules.approvals.service import ApprovalService
 from app.modules.executions.dispatch import schedule_recovery
 from app.modules.outbox.dispatcher import OutboxDispatcher
 from app.modules.outbox.repository import OutboxRepository
@@ -62,6 +63,7 @@ def main(*, workflow_database: Database | None = None) -> int:
                 try:
                     while True:
                         try:
+                            ApprovalService(database).expire_due()
                             scheduled = schedule_recovery(
                                 database, redelivery_seconds=settings.worker_redelivery_seconds
                             )

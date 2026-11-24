@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.approvals import router as approvals_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.connections import router as connections_router
 from app.api.v1.gmail import router as gmail_router
@@ -13,6 +14,7 @@ from app.api.v1.workflows import router as workflows_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health_router)
+api_router.include_router(approvals_router)
 api_router.include_router(auth_router)
 api_router.include_router(node_types_router)
 api_router.include_router(workflows_router)

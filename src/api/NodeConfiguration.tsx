@@ -18,6 +18,49 @@ export function NodeConfiguration({
   const [advanced, setAdvanced] = useState(!supported);
   const [invalid, setInvalid] = useState(false);
   const update = (key: string, value: string) => onChange({ ...node.config, [key]: value });
+  if (node.type === 'approval')
+    return (
+      <div className="api-form">
+        <p>
+          The workflow owner reviews the saved input. This node requires background mode and a pure
+          workflow.
+        </p>
+        <label className="label" htmlFor={`approval-title-${node.id}`}>
+          Review title
+        </label>
+        <input
+          id={`approval-title-${node.id}`}
+          className="input"
+          maxLength={200}
+          disabled={disabled}
+          value={typeof node.config.title === 'string' ? node.config.title : ''}
+          onChange={(event) => update('title', event.target.value)}
+        />
+        <label className="label" htmlFor={`approval-expiry-${node.id}`}>
+          Expires after (seconds)
+        </label>
+        <input
+          id={`approval-expiry-${node.id}`}
+          className="input"
+          type="number"
+          min={60}
+          max={604800}
+          disabled={disabled}
+          value={
+            typeof node.config.expires_in_seconds === 'number'
+              ? node.config.expires_in_seconds
+              : 86400
+          }
+          onChange={(event) =>
+            onChange({ ...node.config, expires_in_seconds: Number(event.target.value) })
+          }
+        />
+        <p className="muted">
+          Connect both approved and rejected branches. The node output contains the decision; map
+          earlier outputs explicitly when needed.
+        </p>
+      </div>
+    );
   return (
     <div className="api-form">
       {supported && (

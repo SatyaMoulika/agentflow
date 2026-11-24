@@ -828,6 +828,67 @@ def wait_completed(database: Database, run_id, owner, *, timeout=20):
 
 
 @pytest.mark.redis_integration
+def test_approval_releases_real_worker_and_resumes_after_process_restart(
+    repository_database: Database,
+    prepared,
+    real_transport,
+) -> None:
+    from app.modules.approvals.schemas import ApprovalDecision
+    from app.modules.approvals.service import ApprovalService
+
+    _, _, owner, workflow, _, _ = prepared
+    _, _, _, launch = real_transport
+    graph = {
+        "schema_version": "1.0",
+        "nodes": [
+            {"id": "start", "type": "manual", "config": {}},
+            {"id": "review", "type": "approval", "config": {"title": "Review"}},
+            {"id": "yes", "type": "end", "config": {}},
+            {"id": "no", "type": "end", "config": {}},
+        ],
+        "edges": [
+            {"id": "a", "source": "start", "target": "review"},
+            {"id": "b", "source": "review", "target": "yes", "source_handle": "approved"},
+            {"id": "c", "source": "review", "target": "no", "source_handle": "rejected"},
+        ],
+    }
+    with repository_database.unit_of_work() as session:
+        version = (
+            WorkflowRepository(session)
+            .append_version(
+                workflow_id=workflow,
+                owner_id=owner,
+                expected_version=1,
+                definition=graph,
+            )
+            .id
+        )
+    approval_setup = list(prepared)
+    approval_setup[4] = version
+    with launch(), launch("dispatcher"):
+        original = queued(repository_database, approval_setup)
+        deadline = monotonic() + 20
+        while monotonic() < deadline:
+            waiting = ExecutionService(repository_database).get(run_id=original.id, owner_id=owner)
+            if waiting.status == RunStatus.WAITING_APPROVAL:
+                break
+            sleep(0.1)
+        else:
+            pytest.fail("Real worker did not persist the approval pause")
+        # The same solo worker can execute another immutable version while review waits.
+        other = queued(repository_database, prepared)
+        assert wait_completed(repository_database, other.id, owner).status == RunStatus.SUCCEEDED
+    # Both original processes are stopped before the human decision creates resume intent.
+    approvals = ApprovalService(repository_database)
+    request = approvals.list(owner, run_id=original.id).items[0]
+    approvals.decide(owner, request.id, ApprovalDecision(decision="approved"))
+    with launch(), launch("dispatcher"):
+        completed = wait_completed(repository_database, original.id, owner)
+    assert completed.status == RunStatus.SUCCEEDED and completed.output == {"decision": "approved"}
+    assert completed.node_runs[0] == waiting.node_runs[0]
+
+
+@pytest.mark.redis_integration
 async def test_queued_api_to_real_broker_worker_and_duplicate_delivery(
     repository_database: Database,
     prepared,

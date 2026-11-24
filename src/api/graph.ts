@@ -70,6 +70,8 @@ export function starterDefinition(): Definition {
 }
 export function defaultNode(type: string, start = 'start', index = 0): GraphNode {
   let config: JsonObject = {};
+  if (type === 'approval')
+    config = { title: 'Review this workflow input', expires_in_seconds: 86400 };
   if (type === 'http') config = { connection_id: '' };
   if (type === 'gmail_read') config = { connection_id: '', message_id_field: 'message_id' };
   if (type === 'transform') config = { operation: 'identity' };

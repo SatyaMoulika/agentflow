@@ -23,11 +23,11 @@ import {
   RunView,
   Account,
   Integrations,
-  Unavailable,
 } from './api/pages';
 import Editor from './api/Editor';
 import RunWorkflow, { RunWorkflowList } from './api/RunWorkflow';
 import { GmailCallback } from './api/GmailConnections';
+import { Approvals, ApprovalView } from './api/Approvals';
 import './api/workspace.css';
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -114,7 +114,8 @@ const router = createBrowserRouter(
           <Route path="settings" element={<Account />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="integrations/gmail/callback" element={<GmailCallback />} />
-          <Route path="approvals/*" element={<Unavailable kind="Approvals" />} />
+          <Route path="approvals" element={<Approvals />} />
+          <Route path="approvals/:approvalId" element={<ApprovalView />} />
           <Route
             path="*"
             element={

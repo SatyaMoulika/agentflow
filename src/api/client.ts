@@ -1,4 +1,6 @@
 import type {
+  Approval,
+  ApprovalDetail,
   Catalog,
   ConnectionAuth,
   Definition,
@@ -342,6 +344,15 @@ export const api = {
   revokeConnection: (id: string) =>
     client.request<void>(`/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   me: () => client.request<User>('/auth/me'),
+  approvals: (values: Record<string, string | number | undefined> = {}, signal?: AbortSignal) =>
+    client.request<Page<Approval>>(`/approvals${query(values)}`, { signal }),
+  approval: (id: string, signal?: AbortSignal) =>
+    client.request<ApprovalDetail>(`/approvals/${encodeURIComponent(id)}`, { signal }),
+  decideApproval: (id: string, decision: 'approved' | 'rejected', note: string | null) =>
+    client.request<Approval>(`/approvals/${encodeURIComponent(id)}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, note }),
+    }),
   groqCompletion: (prompt: string) =>
     client.request<{ model: string; content: string; metadata?: ProviderMetadata | null }>(
       '/ai/completions',

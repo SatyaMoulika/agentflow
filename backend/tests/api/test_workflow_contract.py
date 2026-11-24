@@ -126,7 +126,7 @@ async def test_workflow_openapi_matches_versioned_drafts_and_partial_patch_rules
         "created_at",
         "updated_at",
     }
-    assert len(schema["paths"]) == 28
+    assert len(schema["paths"]) == 31
 
     assert patch["dependentRequired"] == {
         "definition": ["expected_version"],

@@ -45,6 +45,8 @@ RETRYABLE_FAILURE_CODES = frozenset({FailureCode.INTERNAL_FAILURE, FailureCode.D
 
 
 class EventType(StrEnum):
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_RESOLVED = "approval.resolved"
     AGENT_CHECKPOINTED = "agent.checkpointed"
     AGENT_RESUMED = "agent.resumed"
     RUN_CREATED = "run.created"

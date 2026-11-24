@@ -53,6 +53,9 @@ async def test_openapi_documents_health_and_only_the_implemented_endpoints() -> 
     assert response.status_code == 200
     schema = response.json()
     assert set(schema["paths"]) == {
+        "/api/v1/approvals",
+        "/api/v1/approvals/{approval_id}",
+        "/api/v1/approvals/{approval_id}/decision",
         "/api/v1/connections",
         "/api/v1/connections/{connection_id}",
         "/api/v1/workflows/generate",

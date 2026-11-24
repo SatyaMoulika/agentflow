@@ -22,7 +22,6 @@ from app.modules.executions.recovery import (
 from app.modules.executions.repository import ExecutionRepository
 from app.modules.executions.retry_models import NodeRetry
 from app.modules.executions.retry_policy import retry_delay
-from app.modules.executions.runner import RETRY_SAFE_TYPES
 from app.modules.executions.state import (
     RETRYABLE_FAILURE_CODES,
     EventType,
@@ -31,6 +30,7 @@ from app.modules.executions.state import (
     RunStatus,
 )
 from app.modules.workflows.compiler import compile_workflow
+from app.modules.workflows.node_registry import BACKGROUND_READY_TYPES
 
 
 class WorkerState:
@@ -159,7 +159,7 @@ class WorkerState:
             if version is None or version.workflow_id != run.workflow_id:
                 raise ExecutionConflictError()
             plan = compile_workflow(version.definition_json).plan
-            if plan is None or any(node.type not in RETRY_SAFE_TYPES for node in plan.nodes):
+            if plan is None or any(node.type not in BACKGROUND_READY_TYPES for node in plan.nodes):
                 raise ExecutionConflictError()
             attempts = list(
                 session.scalars(
@@ -211,6 +211,67 @@ class WorkerState:
                 target=target,
                 output=output,
                 error_code=error_code,
+            )
+
+    def pause_approval(
+        self,
+        *,
+        expected_run_revision: int,
+        node_id: str,
+        input_data: dict[str, Any],
+        config: dict[str, Any],
+    ) -> None:
+        from app.modules.approvals.models import Approval
+        from app.modules.workflows.node_configs import ApprovalConfig
+
+        settings = ApprovalConfig.model_validate(config)
+        with self.database.unit_of_work() as session:
+            repository = self._checked(session)
+            run = repository.lock_owned(run_id=self.claim.run_id, owner_id=self.owner_id)
+            if session.get(WorkflowDispatch, run.id) is None:
+                raise ExecutionConflictError()
+            attempt = repository.add_attempt(
+                run_id=run.id,
+                owner_id=self.owner_id,
+                expected_run_revision=expected_run_revision,
+                node_id=node_id,
+                input_json=input_data,
+            )
+            for revision, status in ((0, NodeStatus.RUNNING), (1, NodeStatus.WAITING_APPROVAL)):
+                repository.transition_attempt(
+                    run_id=run.id,
+                    owner_id=self.owner_id,
+                    attempt_id=attempt.id,
+                    expected_run_revision=expected_run_revision,
+                    expected_revision=revision,
+                    target=status,
+                )
+            now = session.scalar(select(func.clock_timestamp()))
+            assert now is not None
+            approval = Approval(
+                workflow_run_id=run.id,
+                node_run_id=attempt.id,
+                node_id=node_id,
+                assigned_to=self.owner_id,
+                title=settings.title,
+                created_at=now,
+                expires_at=now + timedelta(seconds=settings.expires_in_seconds),
+            )
+            session.add(approval)
+            session.flush()
+            repository._event(
+                run,
+                EventType.APPROVAL_REQUESTED,
+                {"approval_id": str(approval.id), "expires_at": approval.expires_at.isoformat()},
+                attempt.id,
+            )
+            # Release while the run is still running: claim fencing rejects waiting runs.
+            ClaimRepository(session).release(self.claim)
+            repository.transition_run(
+                run_id=run.id,
+                owner_id=self.owner_id,
+                expected_revision=expected_run_revision,
+                target=RunStatus.WAITING_APPROVAL,
             )
 
     def start_attempt(

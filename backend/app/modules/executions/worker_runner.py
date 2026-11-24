@@ -19,10 +19,10 @@ from app.modules.executions.operations import (
 from app.modules.executions.payloads import copy_payload
 from app.modules.executions.recovery_snapshot import read_recovery_snapshot
 from app.modules.executions.repository import ExecutionRepository
-from app.modules.executions.runner import RETRY_SAFE_TYPES
 from app.modules.executions.state import FailureCode, NodeStatus, RunStatus
 from app.modules.executions.worker_state import WorkerState
 from app.modules.workflows.compiler import compile_workflow
+from app.modules.workflows.node_registry import BACKGROUND_READY_TYPES
 
 
 class PureWorkerRunner:
@@ -56,7 +56,7 @@ class PureWorkerRunner:
                 raise WorkflowNotExecutableError()
             definition = deepcopy(version.definition_json)
         plan = compile_workflow(definition).plan
-        if plan is None or any(node.type not in RETRY_SAFE_TYPES for node in plan.nodes):
+        if plan is None or any(node.type not in BACKGROUND_READY_TYPES for node in plan.nodes):
             raise WorkflowNotExecutableError()
         with self.database.unit_of_work() as session:
             ExecutionRepository(session).lock_owned(run_id=run_id, owner_id=owner_id)
@@ -111,6 +111,14 @@ class PureWorkerRunner:
                 resolved, config, code = {}, {}, error.code
             except Exception:
                 resolved, config, code = {}, {}, FailureCode.INTERNAL_FAILURE
+            if node.type == "approval" and code is None:
+                worker.pause_approval(
+                    expected_run_revision=snapshot.revision,
+                    node_id=node.id,
+                    input_data=resolved,
+                    config=config,
+                )
+                return True
             attempt_id = worker.start_attempt(
                 expected_run_revision=snapshot.revision, node_id=node.id, input_data=resolved
             )

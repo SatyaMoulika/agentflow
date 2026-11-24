@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationEr
 
 from app.modules.workflows.node_configs import (
     AgentConfig,
+    ApprovalConfig,
     CalculatorConfig,
     ClassifyConfig,
     ConditionConfig,
@@ -23,6 +24,7 @@ from app.modules.workflows.node_configs import (
 )
 
 NodeTypeId = Literal[
+    "approval",
     "agent",
     "gmail_read",
     "http",
@@ -40,6 +42,7 @@ NodeTypeId = Literal[
 NodeCategory = Literal["trigger", "logic", "tool"]
 EXECUTION_READY_TYPES: frozenset[NodeTypeId] = frozenset(
     {
+        "approval",
         "agent",
         "gmail_read",
         "http",
@@ -54,6 +57,10 @@ EXECUTION_READY_TYPES: frozenset[NodeTypeId] = frozenset(
         "classify",
         "extract",
     }
+)
+
+BACKGROUND_READY_TYPES = frozenset(
+    {"manual", "transform", "condition", "calculator", "merge", "end", "json_parser", "approval"}
 )
 
 
@@ -98,6 +105,14 @@ class _Registration:
 
 
 _REGISTRATIONS = (
+    _Registration(
+        "approval",
+        "Owner approval",
+        "logic",
+        "Pause for the workflow owner. Requires background mode and a pure workflow.",
+        ("approved", "rejected"),
+        TypeAdapter(ApprovalConfig),
+    ),
     _Registration(
         "gmail_read",
         "Read Gmail message",

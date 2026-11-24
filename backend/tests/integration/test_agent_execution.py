@@ -319,7 +319,7 @@ def http_transport(monkeypatch, database, *, during=None, failure=None):
 
     def get(connection, **kwargs):
         assert database.engine.pool.checkedout() == baseline
-        assert 0 < kwargs["timeout_seconds"] <= 60 and kwargs["max_response_bytes"] == 16384
+        assert 0 < kwargs["timeout_seconds"] <= 60 and kwargs["max_response_bytes"] == 32768
         calls.append(connection)
         if during:
             during()

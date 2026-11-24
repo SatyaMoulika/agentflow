@@ -1,6 +1,6 @@
 # Backend implementation plan
 
-## Current status — 16 November 2026
+## Current status — 23 November 2026
 
 This section is the authoritative phase status. The original design sequence below remains the roadmap; detailed historical snapshots live in the development log rather than competing current-status notices.
 
@@ -10,17 +10,19 @@ This section is the authoritative phase status. The original design sequence bel
 | 6     | Implemented for pure workflows  | Redis/Celery, durable outbox, claim leases/fences, recovery discovery, heartbeats and scheduled retries. External calls are excluded from automatic replay/recovery.                                                                                   |
 | 7     | Scoped implementation complete  | Groq LLM, reviewed generation/version-bound edits, classify/extract, JSON parsing, protected fixed-endpoint HTTP GET, encrypted optional credentials, provider failures/usage and authorized connection selection. Browser acceptance remains pending. |
 | 8     | 8A/8B and scoped 8C implemented | Bounded LangGraph calculator/authorized HTTP tools and persistent checkpoints with explicit continuation at saved post-tool pauses. Unknown in-flight external calls are not automatically recovered.                                                  |
-| 9     | Partial                         | SSE replay/reconnect/heartbeat and polling fallback exist. Trace context is persisted for background runs, and optional local Phoenix OTLP export is implemented; real collector and cross-process acceptance remain to be verified. |
-| 10    | Pending                         | Durable approval, authorization/expiry and safe resume/reconciliation.                                                                                                                                                                                 |
-| 11    | Partial                         | Real auth, workflow editor, integrations and run history are wired. Approval UI, browser/security/performance acceptance and deployment hardening remain.                                                                                              |
+| 9     | Partial                         | SSE replay/reconnect/heartbeat and polling fallback exist. Trace context is persisted for background runs, and optional local Phoenix OTLP export is implemented; real collector and cross-process acceptance remain to be verified.                   |
+| 10    | Scoped implementation complete  | Durable owner approvals for pure background graphs, authorized decisions/expiry/cancellation and atomic outbox resume. External-call approval/reconciliation remains future work.                                                                      |
+| 11    | Partial                         | Real auth, editor, integrations, run history and approval UI are wired. Browser/security/performance acceptance, richer account features and deployment hardening remain.                                                                              |
 
-Current source migration head is **0013**; the local development database must be upgraded separately. Gmail connection tables were added on 13 November 2026, and checkpoint storage was set up on 12 November. No fixtures or destructive tests were run against development.
+Current source migration head is **0014**; the local development database must be upgraded separately. Gmail connection tables were added on 13 November 2026, and checkpoint storage was set up on 12 November. No fixtures or destructive tests were run against development.
 
-Verification on 16 November 2026: the complete backend checker passed **1,390 tests** with isolated PostgreSQL/Redis, Ruff lint/format and Pyright; frontend checks passed **146 tests**, lint, TypeScript and production build. No live Google/Groq call or browser acceptance check was performed for this snapshot. The earlier synthetic live HTTP agent fetched two slides, used the calculator to produce **20**, replayed the committed command without external calls and refused a fresh run after revocation. Only a disposable test schema was used and removed. See [verification](verification.md) for commands and limits, and the [sample review](learning-notes/http-agent.md) for the exact flow.
+Current approval verification: **1,416 backend tests** with isolated PostgreSQL/Redis and **187 frontend tests** passed, plus lint, type checks and build. The combined backend checker remains blocked by the existing formatting issue in applied migration 0013; changed files and migration 0014 are formatted. See [verification](verification.md).
+
+Historical verification on 16 November 2026: the complete backend checker passed **1,390 tests** with isolated PostgreSQL/Redis, Ruff lint/format and Pyright; frontend checks passed **146 tests**, lint, TypeScript and production build. No live Google/Groq call or browser acceptance check was performed for this snapshot. The earlier synthetic live HTTP agent fetched two slides, used the calculator to produce **20**, replayed the committed command without external calls and refused a fresh run after revocation. Only a disposable test schema was used and removed. See [verification](verification.md) for commands and limits, and the [sample review](learning-notes/http-agent.md) for the exact flow.
 
 Operational setup is in the [real-data walkthrough](real-backend-walkthrough.md). Broader HTTP methods, OAuth for additional providers, credential rotation and side-effect reconciliation are future expansion. No paid provider fallback is configured.
 
-The requested Gmail integration has a [separate incremental plan](gmail-implementation-plan.md). Owner-bound read-only OAuth connection setup and manual message reading are available but need Google project configuration and live verification; automatic triggers, approvals and Gmail actions remain to be implemented.
+The requested Gmail integration has a [separate incremental plan](gmail-implementation-plan.md). Owner-bound read-only OAuth connection setup and manual message reading are available but need Google project configuration and live verification; automatic triggers, Gmail-connected approvals and Gmail actions remain to be implemented.
 
 ## Historical repository findings at Phase 0
 

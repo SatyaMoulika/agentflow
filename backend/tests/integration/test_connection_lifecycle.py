@@ -349,7 +349,7 @@ def test_additive_connection_migration_preserves_users_and_refuses_history_downg
     with pytest.raises(IntegrityError):
         command.downgrade(config, "0008")
     connection.rollback()
-    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
+    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0014"
     assert connection.scalar(text("SELECT count(*) FROM connections")) == 1
 
 

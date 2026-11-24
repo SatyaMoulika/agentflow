@@ -183,6 +183,11 @@ def next_node_id(node: CompiledNode, output: dict[str, Any]) -> str | None:
     if node.type == "end":
         return None
     handle = "default"
+    if node.type == "approval":
+        decision = output.get("decision")
+        if decision not in {"approved", "rejected"}:
+            raise NodeExecutionError(FailureCode.INTERNAL_FAILURE)
+        handle = decision
     if node.type == "condition":
         decision = output.get("result")
         if type(decision) is not bool:

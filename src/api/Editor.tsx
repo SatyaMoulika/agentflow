@@ -638,6 +638,12 @@ function Designer({
       {!readOnly && (
         <section className="card api-panel">
           <h2>Propose changes with AI</h2>
+          {definition.nodes.some((node) => ['approval', 'gmail_read'].includes(node.type)) && (
+            <p className="muted">
+              AI edit proposals for approval or Gmail workflows are not available yet. Edit these
+              workflows manually.
+            </p>
+          )}
           <p className="muted">
             Your request, saved definition, and metadata for existing or selected HTTP connections
             are sent to Groq. Credentials stay on the server. Save any current changes first. Review
@@ -667,7 +673,13 @@ function Designer({
             }}
           />
           <Button
-            disabled={!!busy || dirty || !saved.current_version_id || !editPrompt.trim()}
+            disabled={
+              !!busy ||
+              dirty ||
+              !saved.current_version_id ||
+              !editPrompt.trim() ||
+              definition.nodes.some((node) => ['approval', 'gmail_read'].includes(node.type))
+            }
             loading={busy === 'proposal'}
             onClick={() => void proposeEdit()}
           >

@@ -174,9 +174,7 @@ def test_invalid_config_has_static_error_without_raw_values(node_type: str, conf
     assert outcome.value.__suppress_context__
 
 
-@pytest.mark.parametrize(
-    "node_type", ["llm", "http_agent", "approval", "webhook", "private-unknown"]
-)
+@pytest.mark.parametrize("node_type", ["llm", "http_agent", "webhook", "private-unknown"])
 def test_unregistered_capabilities_are_not_invented(node_type: str) -> None:
     with pytest.raises(UnsupportedNodeTypeError) as outcome:
         validate_node_config(node_type, {})
@@ -219,6 +217,7 @@ def test_reference_grammar_rejects_expression_or_unbounded_paths(path: str) -> N
 def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> None:
     first = node_type_catalog()
     assert [item.type for item in first.items] == [
+        "approval",
         "gmail_read",
         "agent",
         "http",
@@ -248,6 +247,7 @@ def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> 
             "http",
             "agent",
             "gmail_read",
+            "approval",
         }
         assert item.execution_ready is ready
         assert item.capabilities == (
@@ -275,9 +275,9 @@ def test_catalog_is_fresh_and_all_configuration_schemas_are_self_contained() -> 
     first.items[0].output_handles.append("private-handle")
     first.items.clear()
     second = node_type_catalog()
-    assert len(second.items) == 13
+    assert len(second.items) == 14
     assert "private_mutation" not in second.items[0].config_schema
-    assert second.items[0].output_handles == ["default"]
+    assert second.items[0].output_handles == ["approved", "rejected"]
 
 
 def test_draft_saves_remain_independent_of_executable_config_validation() -> None:

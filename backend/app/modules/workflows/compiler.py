@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.modules.workflows.graph_schemas import GraphEdge, GraphNode
 from app.modules.workflows.node_registry import (
+    BACKGROUND_READY_TYPES,
     InvalidNodeConfigError,
     NodeTypeId,
     UnsupportedNodeTypeError,
@@ -21,6 +22,7 @@ from app.modules.workflows.schemas import WorkflowDefinition
 from app.modules.workflows.validation_schemas import WorkflowValidationIssue
 
 _MESSAGES = {
+    "APPROVAL_REQUIRES_PURE_GRAPH": "Approval workflows currently support only pure nodes.",
     "INVALID_DEFINITION": "The definition does not match the supported graph envelope.",
     "EMPTY_GRAPH": "Provide at least one node.",
     "INVALID_NODE": "The node does not match the supported node envelope.",
@@ -224,6 +226,10 @@ def compile_workflow(definition: dict[str, Any]) -> CompilationResult:
         diagnostics.add("EMPTY_GRAPH", "nodes")
         return diagnostics.invalid()
     nodes, configs, indices = _nodes(envelope.nodes, diagnostics)
+    if any(node.type == "approval" for node in nodes.values()) and any(
+        node.type not in BACKGROUND_READY_TYPES for node in nodes.values()
+    ):
+        diagnostics.add("APPROVAL_REQUIRES_PURE_GRAPH", "nodes")
     if diagnostics.items:
         return diagnostics.invalid()
     edges = _edges(envelope.edges, nodes, diagnostics)
