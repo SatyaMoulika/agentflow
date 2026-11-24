@@ -127,7 +127,7 @@
 .api-workflow-card .api-actions {
   margin-top: 8px;
 }
-.api-workflow-card a:hover,
+.api-workflow-card a:not(.button):hover,
 .api-table a:hover {
   color: var(--primary);
 }

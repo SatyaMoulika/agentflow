@@ -6,7 +6,7 @@ import { date, elapsed } from './format';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Activity, ArrowRight, GitBranch, Plus, RefreshCw, Workflow } from 'lucide-react';
+import { Activity, ArrowRight, GitBranch, Play, Plus, RefreshCw, Workflow } from 'lucide-react';
 import { Badge, Button, EmptyState, JsonViewer, PageHeader } from '../components/ui';
 import { api } from './client';
 import { EventCursor } from './eventStream';
@@ -150,12 +150,20 @@ export function WorkflowList() {
         title="Workflows"
         description="Definitions saved in your account."
         actions={
-          <Button asChild variant="primary">
-            <Link to="/workflows/new">
-              <Plus size={16} />
-              Create workflow
-            </Link>
-          </Button>
+          <>
+            <Button asChild>
+              <Link to="/run">
+                <Play size={16} />
+                Run workflow
+              </Link>
+            </Button>
+            <Button asChild variant="primary">
+              <Link to="/workflows/new">
+                <Plus size={16} />
+                Create workflow
+              </Link>
+            </Button>
+          </>
         }
       />
       <form
@@ -217,14 +225,20 @@ export function WorkflowList() {
                   {date(item.updated_at)}
                 </small>
                 <div className="api-actions">
+                  {item.status !== 'archived' && item.current_version_id && (
+                    <Button asChild variant="primary">
+                      <Link
+                        to={`/workflows/${item.id}/run`}
+                        aria-label={`Run workflow ${item.name}`}
+                      >
+                        <Play size={16} />
+                        Run workflow
+                      </Link>
+                    </Button>
+                  )}
                   <Button asChild>
                     <Link to={`/workflows/${item.id}/edit`}>Open editor</Link>
                   </Button>
-                  {item.status !== 'archived' && item.current_version_id && (
-                    <Button asChild>
-                      <Link to={`/workflows/${item.id}/run`}>Run</Link>
-                    </Button>
-                  )}
                   <Link to={`/executions?workflow_id=${item.id}`}>Runs</Link>
                   {item.status !== 'archived' && (
                     <Button

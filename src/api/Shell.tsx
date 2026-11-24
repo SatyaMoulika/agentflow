@@ -7,7 +7,6 @@ import {
   Layers3,
   LogOut,
   Menu,
-  Play,
   Settings,
   Workflow,
   X,
@@ -20,7 +19,6 @@ import '../layouts/shell.css';
 const links = [
   ['/dashboard', 'Overview', House],
   ['/workflows', 'Workflows', Workflow],
-  ['/run', 'Run workflow', Play],
   ['/executions', 'Executions', Activity],
   ['/integrations', 'Integrations', Layers3],
   ['/approvals', 'Approvals', ClipboardCheck],
@@ -58,7 +56,6 @@ export default function Shell() {
             agentflow<span className="brand-period">.</span>
           </span>
         </Link>
-        <div className="nav-label">NAVIGATION</div>
         <nav id="app-navigation" aria-label="Main navigation">
           {links.map(([path, label, Icon]) => (
             <NavLink
